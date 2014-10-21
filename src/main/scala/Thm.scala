@@ -10,7 +10,7 @@ import TermInstances._
 import util.RichCollectionInstances._
 
 /** Literals: atomic formulas and their negations.
-  * @param polarity Is this a negated atomic formula?
+  * @param polarity Is this a non-negated atomic formula?
   *
   * @tparam V The alphabet from which variable names are drawn
   * @tparam F The alphabet from which functor names are drawn
