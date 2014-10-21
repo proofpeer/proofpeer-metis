@@ -39,7 +39,8 @@ class NetSpec extends FlatSpec {
   assert(net.matched(tm6) == List(1))
   assert(net.matched(tm7) == List(1,2,4))
   assert(net.unifies(tm1) == List(1,2,4))
-  assert(net.unifies(tm6) == List(1,2,4))
+  assert(net.unifies(tm6) == List(1))
+  assert(net.unifies(tm7) == List(1,2,4))
   assert(net.size == 5)
   assert(net.filter(_ => false).size == 0)
 }
