@@ -7,14 +7,8 @@ import scalaz.std._
 import Scalaz._
 
 object Nets {
-  /** A trie-like map from terms to values.
-    *
-    * @tparam F the alphabet from which functor names are drawn
-    * @tparam A the type of values
-    */
   abstract sealed class TermNetImpl[F,A]
 
-  /** The empty map. */
   private case class Empty[F,A]() extends TermNetImpl[F,A]
 
   // Lookup is performed (effectively) by first flattening terms. Once flattened, the
@@ -33,16 +27,27 @@ object Nets {
     net:Option[TermNetImpl[F,A]],
     arityMap:Map[(F,Int),TermNetImpl[F,A]]) extends TermNetImpl[F,A]
 
+  /** A trie-like map from quotiented terms (all variables are made distinct) to
+    * sets of values.
+    *
+    * @tparam F the alphabet from which functor names are drawn
+    * @tparam A the type of values
+    */
   class TermNet[F,A] private (termNet: TermNetImpl[F,A], theSize: Int) {
+
+    /** Create an empty map. */
     def this() {
       this(Empty[F,A],0)
     }
 
+    /** Return true if the map is empty. */
     def isEmpty = termNet match {
       case Empty() => true
       case _       => false
     }
 
+    /** The number of values held in the map. Note that a single term may have one
+        or more values. */
     val size = this.theSize
 
     private def insertNet(
@@ -114,6 +119,7 @@ object Nets {
       }
     }
 
+    /** Filter values from the map. */
     def filter(pred: A => Boolean) = {
       val termNet = filterNet(pred,this.termNet)
       new TermNet(termNet,computeSize(termNet))
@@ -126,20 +132,22 @@ object Nets {
       }
     }
 
-    def insert[V](tm: Term[V,F],x: A): TermNet[F,A] = {
+    /** Insert/append a new value into the map for a given pattern. All variables in
+      * the pattern will be (effectively) renamed so that all are unique. */
+    def insert[V](pat: Term[V,F],x: A): TermNet[F,A] = {
       new TermNet(
-        insertNet(Result(List(x)),List(qTerm(tm)),this.termNet),
+        insertNet(Result(List(x)),List(qTerm(pat)),this.termNet),
         this.size + 1)
     }
 
     // Hurd makes this tail-recursive.
-    private def termMatchesQTerm[V](term: Term[V,F], qterm: Term[Unit,(F,Int)]):
+    private def termMatchesQPat[V](term: Term[V,F], qpat: Term[Unit,(F,Int)]):
         Boolean =
-      (term,qterm) match {
+      (term,qpat) match {
         case (_,Var(())) => true
-        case (Fun(f1,args1),Fun((f2,_),args2)) if f1 == f2 =>
-          args1.view.zip(args2).map {
-            case (arg1,arg2) => termMatchesQTerm(arg1,arg2)
+        case (Fun(f1,args),Fun((f2,_),qpats)) if f1 == f2 =>
+          args.view.zip(qpats).map {
+            case (arg,qpat2) => termMatchesQPat(arg,qpat2)
           }.foldLeft(true) { _ && _ }
         case _ =>
           false
@@ -148,7 +156,7 @@ object Nets {
     private def matches[V](args: List[Term[V,F]],net:TermNetImpl[F,A]): List[A] =
       (args,net) match {
         case (List(),Result(xs)) => xs
-        case (arg::args,Stem(arg2,net2)) if termMatchesQTerm(arg,arg2) =>
+        case (arg::args,Stem(pat,net2)) if termMatchesQPat(arg,pat) =>
           matches(args,net2)
         case (arg::args,Branch(vnet,fmap)) =>
           val vresults = vnet.map(matches(args,_)).getOrElse(List())
@@ -162,6 +170,7 @@ object Nets {
         case _ => throw new Error("Bug: matches")
       }
 
+    /** Return all values where tm matches a key-pattern. */
     def matches[V](tm: Term[V,F]): List[A] = {
       this.termNet match {
         case Empty() => List()
@@ -170,26 +179,28 @@ object Nets {
     }
 
     type QSubst[V] = PartialFunction[V,Term[Unit,(F,Int)]]
-    private def qTermMatchesTerm[V](
+    private def qTermMatchesPat[V](
       θ: QSubst[V],
       qtm:Term[Unit,(F,Int)],
-      tm:Term[V,F]):
+      pat:Term[V,F]):
         Option[QSubst[V]] = {
-      (qtm,tm) match {
+      (qtm,pat) match {
         case (_,(Var(v))) =>
           θ.lift(v) match {
           case None       => Some(θ.orElse(Map() + { v → qtm }))
           case Some(qtm2) if qtm == qtm2 => Some(θ)
           case _          => None
         }
-        case (Fun(f1,fargs1),Fun(f2,fargs2)) if f1 == (f2,fargs2.length) =>
-          fargs1.zip(fargs2).foldLeftM(θ) {
-            case (θ,(arg1,arg2)) => qTermMatchesTerm(θ,arg1,arg2)
+        case (Fun(f,fargs),Fun(g,pats)) if f == (g,pats.length) =>
+          fargs.zip(pats).foldLeftM(θ) {
+            case (θ,(arg,pat)) => qTermMatchesPat(θ,arg,pat)
           }
         case (_,_) => None
       }
     }
 
+    // Grab a list of the next possible n-length chains of arguments and the nets
+    // which follow them.
     private def nextArgs[V](n:Int,net:TermNetImpl[F,A]):
         List[(List[Term[Unit,(F,Int)]],TermNetImpl[F,A])] = {
       if (n == 0) {
@@ -219,6 +230,8 @@ object Nets {
       }
     }
 
+    // Grab a list of the next possible arguments in the net and the nets which
+    // follow.
     private def nextArg[V](net:TermNetImpl[F,A]):
         List[(Term[Unit,(F,Int)],TermNetImpl[F,A])] = {
       nextArgs(1,net).map {
@@ -227,42 +240,42 @@ object Nets {
       }
     }
 
-    // This code is simpler than Hurd's, but is consequently suboptimal. Note
-    // that we retrieve the nextTerm and *then* check whether it is equal to
-    // the variable bound to v in θ. In case of unequal terms, Hurd's solution
-    // is more opportunistic, failing early as the nextArg is computed
-    // (see foldEqualTerms). Note this for potential future optimisations.
+    // This code is simpler than Hurd's, but is probably very suboptimal. Note
+    // that we retrieve all possible nextTerms and *then* check whether each is
+    // equal to the variable bound to v in θ. In case of unequal terms, Hurd's
+    // solution is more opportunistic, not returning nextTerms as soon as they
+    // are known to be unequal to the sought term. (see foldEqualTerms).
     private def matched[V](
       θ: QSubst[V],
-      args: List[Term[V,F]],
+      pats: List[Term[V,F]],
       net:TermNetImpl[F,A]): List[(QSubst[V],List[A])] = {
-      (args,net) match {
+      (pats,net) match {
         case (List(),Result(xs)) => List((θ,xs))
-        case (Var(v)::args,net) => {
+        case (Var(v)::pats,net) => {
           val boundTo = θ.lift(v)
           (for ((next,net2) <- nextArg(net))
           yield boundTo match {
-            case None => matched(θ.orElse (Map() + (v → next)), args, net2)
-            case Some(tm) if next == tm => matched(θ, args, net2)
+            case None => matched(θ.orElse (Map() + (v → next)), pats, net2)
+            case Some(tm) if next == tm => matched(θ, pats, net2)
             case _ => List()
           }).flatten
         }
-        case (arg::args,Stem(arg2,net2)) =>
-          qTermMatchesTerm(θ,arg2,arg).map {
-            θ2 => matched(θ2,args,net2)
+        case (pat::pats,Stem(arg,net2)) =>
+          qTermMatchesPat(θ,arg,pat).map {
+            θ2 => matched(θ2,pats,net2)
           }.getOrElse(List())
-        case (arg::args,Branch(vnet,fnet)) =>
+        case (pat::pats,Branch(vnet,fnet)) =>
           val vmatches = vnet match {
             case None => List()
             case Some(vnet) =>
-            qTermMatchesTerm(θ,Var(()),arg).map {
-              case vθ => matched(vθ,args,vnet)
+            qTermMatchesPat(θ,Var(()),pat).map {
+              case vθ => matched(vθ,pats,vnet)
             }.getOrElse(List())
           }
-          val fmatches = arg match {
+          val fmatches = pat match {
             case Fun(f,fargs) =>
               fnet.lift((f,fargs.length)).map {
-                fnet => matched(θ,fargs++args,fnet)
+                fnet => matched(θ,fargs++pats,fnet)
               }.getOrElse(List())
             case _ => List()
           }
@@ -271,11 +284,12 @@ object Nets {
       }
     }
 
-    def matched[V](tm: Term[V,F]): List[A] = {
+    /** Return all values where the key matches the given pattern. */
+    def matched[V](pat: Term[V,F]): List[A] = {
       this.termNet match {
         case Empty() => List()
         case net     =>
-          matched(Map(), List(tm), net).map(_._2).flatten
+          matched(Map(), List(pat), net).map(_._2).flatten
       }
     }
 
@@ -375,9 +389,86 @@ object Nets {
       }
     }
 
+    /** Return all values where tm can be unified with the key. */
     def unifies[V](tm: Term[V,F]):
         List[A] = {
       unifies(Map(),List(tm),this.termNet)
+    }
+  }
+
+  /** A factor for trie-like maps from atoms to values.
+    *
+    * @tparam F the alphabet from which functor names are drawn
+    * @tparam P the alphabet from which predicate names are drawn
+    * @tparam A the type of values
+    *
+    * @param predicatesAreFunctors Internally, an AtomNet is just a TermNet. To
+    * accommodate this, we need a one-one function from predicates to functors.
+    * This is then legal, since predicates can only occur at the head position of a
+    * term.
+    * @param eqFunctor As above, we need a functor to represent equality, which is
+    * distinct from all other predicate functors.
+  */
+  class AtomNet[F,P,A](predicatesAreFunctors: P=>F, eqFunctor: F) {
+    private[Nets] def atomToTerm[V](atm: Atom[V,F,P]) = {
+      atm match {
+        case Pred(p,args) => Fun(predicatesAreFunctors(p),args)
+        case Eql(lhs,rhs) => Fun(eqFunctor,List(lhs,rhs))
+      }
+    }
+
+    class AtomNet private (termNet: TermNet[F,A]) {
+      def this() {
+        this(new TermNet)
+      }
+
+      def insert[V](atm:Atom[V,F,P], x:A) =
+        new AtomNet(termNet.insert(atomToTerm(atm),x))
+      def filter(pred: A=>Boolean) = new AtomNet(termNet.filter(pred))
+      def unifies[V](atm: Atom[V,F,P]) = termNet.unifies(atomToTerm(atm))
+      def matches[V](atm: Atom[V,F,P]) = termNet.matches(atomToTerm(atm))
+      def matched[V](atm: Atom[V,F,P]) = termNet.matched(atomToTerm(atm))
+      def isEmpty = termNet.isEmpty
+      def size    = termNet.size
+    }
+  }
+
+  /** A factor for trie-like maps from literals to values.
+    *
+    * @tparam F the alphabet from which functor names are drawn
+    * @tparam P the alphabet from which predicate names are drawn
+    * @tparam A the type of values
+    *
+    * @param predicatesAreFunctors Internally, a LiteralNet is just a TermNet. To
+    * accommodate this, we need a one-one function from predicates to functors.
+    * @param eqFunctor As above, we need a functor to represent equality, which is
+    * distinct from all other predicate functors.
+    * @param negFunctor As above, we need a functor to represent negation, which is
+    * distinct from all other predicate functors.
+  */
+  def LiteralNet[F,P,A](predicatesAreFunctors: P=>F, eqFunctor: F, negFunctor: F) {
+    val atomNetF = new AtomNet(predicatesAreFunctors,eqFunctor)
+    class LiteralNet private (termNet: TermNet[F,A]) {
+      private def litToTerm[V](lit: Literal[V,F,P]) = {
+        lit match {
+          case Literal(true,atm)  => atomNetF.atomToTerm(atm)
+          case Literal(false,atm) => Fun(negFunctor,List(atomNetF.atomToTerm(atm)))
+        }
+      }
+
+      /** Create an empty map. */
+      def this() {
+        this(new TermNet)
+      }
+
+      def insert[V](lit:Literal[V,F,P], x:A) =
+        new LiteralNet(termNet.insert(litToTerm(lit),x))
+      def filter(pred: A=>Boolean) = new LiteralNet(termNet.filter(pred))
+      def unifies[V](lit: Literal[V,F,P]) = termNet.unifies(litToTerm(lit))
+      def matches[V](lit: Literal[V,F,P]) = termNet.matches(litToTerm(lit))
+      def matched[V](lit: Literal[V,F,P]) = termNet.matched(litToTerm(lit))
+      def isEmpty = termNet.isEmpty
+      def size    = termNet.size
     }
   }
 }
