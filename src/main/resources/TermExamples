@@ -1,0 +1,7 @@
+Fn ("F",[Var "a",Var "b"])
+Fn ("F",[Fn ("G",[Var "a",Var "b"]),Fn ("H",[Var "c",Var "d"])])
+Fn ("G",[Fn ("F",[Var "x",Var "y"])])
+Fn ("F",[Fn ("K",[Var "x"]),Fn ("K",[Fn ("L",[Var "y"])])])
+Fn ("F",[Var "a"])
+Fn ("F",[Var "z",Var "z"])
+Fn ("F",[Var "z",Var "w"])

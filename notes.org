@@ -1,0 +1,55 @@
+* TermNet
+** Data-types
+   datatype 'a termNet 
+     = Net of parameters                     -- type { fifo : bool }
+              * int                          -- next available id
+              * (int                         -- size
+                 * (int                      -- id
+                    * 'a)                    -- type of values in net
+                   net) option
+** Term nets are basically tries. In METIS, branch labels on the tries are terms with all variable names thrown out.
+  1) a leaf containing some values
+  2) a stem marked by a term
+  3) a branch, splitting at:
+       a plain variable (optional)
+       a functor and arity
+*** Identifiers
+**** Every element added to the term net is given a unique identifier. When the net is used to match a term, the possible matches can be ordered by identifier, provided that fifo = true in parameters. This is hard-coded to false in METIS client code, meaning that the identifiers are unused. size is likewise unused by client-code.
+
+* Resolution loop
+** If there are no clauses left in the waiting queue, then the problem is decided and satisfiable. Otherwise, remove the lightest clause. If it is a contradiction, then the problem is decided and contradictory. Otherwise, add the clause to the active set, returning a new active set and some new clauses. Add the new clauses to the waiting set. Continue.
+*** ACTIVE
+** datatype
+   - a map from int to clause
+   - a rewriter, supporting multiple equations
+   - a set of clauses supporting efficient subsumption checking
+   - a net of literals
+   - a net of equations
+   - a net of subterms
+** ADD: attempt to add a clause to the active set, returning deduced clauses and the new set.
+*** Simplify
+    Algorithm
+    1. use Clause.simplify, which just calls Rule.simplify.
+       If a tautology is found, None is returned (deleting the clause). Otherwise:
+       1. Expand Abbreviations
+          This means we look for conditionals of the form x = t ==> P, which in clausal form have the shape ¬(x = t) ∨ P. The t is substituted for x throughout P.
+       2. Remove Syms
+          This means that we remove equalities/inequalities which are symmetries of each other.
+       3. If nothing has changed, return the new theorem. Otherwise, simplify again.
+    2. The clause is further simplified by resolving against its unit clauses
+    3. If subsumption checking is turned on, and the clause is subsumed according to the supplied subsumption set, then it is deleted (return None)
+*** Post-simplification
+    Algorithm
+    1. If no clause is returned after simplification, then no clauses are returned.
+    2. If the clause is a contradiction, then return it as the derived clause.
+    3. If the clause has been simplified, then factor through the active set, and return the result.
+    4. If no simplification occurred, then add the clause to the active set. Next, create a version of the clause with fresh variables (side-effect on the global name count), and carry out deductions. Factor the deductions through the active set, and return the result.
+*** Factoring
+*** Deduction
+**** Deduce resolution
+**** Paramodulation with largest subterms (as a net) and equations on the results
+**** Paramodulation into equations with the largest subterms (as a net)
+
+
+
+

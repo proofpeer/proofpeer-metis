@@ -1,6 +1,6 @@
-package proofpeer.metis.poly.term
+package proofpeer.metis.poly
 
-import proofpeer.metis.atom._
+import proofpeer.metis._
 import scala.language.implicitConversions
 import scala.util.parsing.combinator.syntactical._
 import scala.util.parsing.combinator.lexical._
@@ -9,29 +9,30 @@ import scalaz.std._
 
 class TermParser extends StandardTokenParsers {
   lexical.reserved   += ("Fn","Var","SOME","NONE","LESS","EQUAL","GREATER")
+
   lexical.delimiters += ("(",")",",","[","]")
 
-  type PolyAtom = Atom[String,String]
+  type PolyTerm = Term[String,String]
 
-  val parseAtom:Parser[PolyAtom] =
+  val parseTerm:Parser[PolyTerm] =
     ("Var" ~> stringLit map { Var[String,String](_) }) |
     ("Fn" ~>
       "(" ~>
       (for {
         i    <- stringLit;
         _    <- "," ~ "[";
-        args <- repsep(parseAtom,",") <~ "]"
+        args <- repsep(parseTerm,",") <~ "]"
       }
-      yield (Comb(i,args)))
+      yield (Fun(i,args)))
       <~ ")") |
-    ("(" ~> parseAtom <~ ")")
+    ("(" ~> parseTerm <~ ")")
 
-  val parseAtomPair:Parser[Tuple2[PolyAtom,PolyAtom]] = {
+  val parseTermPair:Parser[Tuple2[PolyTerm,PolyTerm]] = {
     for {
       _   <- "(":Parser[Any]
-      fst <- parseAtom
+      fst <- parseTerm
       _   <- ",":Parser[Any]
-      snd <- parseAtom
+      snd <- parseTerm
       _   <- ")":Parser[Any]
     }
     yield (fst,snd)
