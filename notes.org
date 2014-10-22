@@ -19,15 +19,18 @@
 * Resolution loop
 ** If there are no clauses left in the waiting queue, then the problem is decided and satisfiable. Otherwise, remove the lightest clause. If it is a contradiction, then the problem is decided and contradictory. Otherwise, add the clause to the active set, returning a new active set and some new clauses. Add the new clauses to the waiting set. Continue.
 *** ACTIVE
-** datatype
+**** datatype
+   - parameters (all defaulted)
    - a map from int to clause
    - a rewriter, supporting multiple equations
+     - parameters (all defaulted)
+       - order: Set to KBO order using defaults defined in KnuthBendixOrder.sml
    - a set of clauses supporting efficient subsumption checking
    - a net of literals
    - a net of equations
    - a net of subterms
-** ADD: attempt to add a clause to the active set, returning deduced clauses and the new set.
-*** Simplify
+**** ADD: attempt to add a clause to the active set, returning deduced clauses and the new set.
+***** Simplify
     Algorithm
     1. use Clause.simplify, which just calls Rule.simplify.
        If a tautology is found, None is returned (deleting the clause). Otherwise:
@@ -36,9 +39,10 @@
        2. Remove Syms
           This means that we remove equalities/inequalities which are symmetries of each other.
        3. If nothing has changed, return the new theorem. Otherwise, simplify again.
-    2. The clause is further simplified by resolving against its unit clauses
-    3. If subsumption checking is turned on, and the clause is subsumed according to the supplied subsumption set, then it is deleted (return None)
-*** Post-simplification
+    2. Rewrite the theorem
+    3. Resolving against its unit clauses
+    4. If subsumption checking is turned on, and the clause is subsumed according to the supplied subsumption set, then it is deleted (return None)
+***** Post-simplification
     Algorithm
     1. If no clause is returned after simplification, then no clauses are returned.
     2. If the clause is a contradiction, then return it as the derived clause.
@@ -49,7 +53,28 @@
 **** Deduce resolution
 **** Paramodulation with largest subterms (as a net) and equations on the results
 **** Paramodulation into equations with the largest subterms (as a net)
+*** REWRITER
+**** datatype
+   - A reduction order (defaulted externally to KBO)
+   - A map from theorem ids to equations with optional orientation
+   - A term net whose keys are redexes and whose values are equations ids into the above map with optional orientation. The integer map is used as a more efficient check on the presence of an equation in the map.
+   - A term net used for interreduction of equations. The keys are subterms of an equation and the values are:
+     - an equation id into the above map naming the equation of which we are a subterm
+     - a path to the subterm in the equation
+     - an indicator saying whether the subterm is on the left or the right hand side of the equality symbol.
+   - A set of equations which have not yet been been reduced
+**** The only part of the rewrite code that is actually called externally is rewriteIdRule
+  1. Given a theorem, grab its literals.
+  2. From the literals, separate out the negated equalities from the literals (can be treated as conditions to rewrite the other literals), whose left and right hand sides are KBO comparable, and map them to conversions which will send the greater side to the smaller.
+  3. Inter-reduce the negated equalities as well as rewriting with the system of rewrite rules.
+     1. Remove a negated equality from the map.
+     2. Rewrite it top-down, repeatedly
+         1. trying the first conversion for the negated equalities in the map
+         2. the system of rewrites
+     3. If the negated equality is changed, add it back in the map. Otherwise put it with the other literals.
+     4. Go to 1 until there are no more changes.
+  4. Use the rewrite from step 3.2 above across all the literals not in the map. (this doesn't sound right, or is at least inefficient. Why bother rewriting the formerly negated equalities, given that we know these have been fully normalised?)
 
+  
 
-
-
+  
