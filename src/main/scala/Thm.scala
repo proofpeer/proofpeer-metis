@@ -40,6 +40,8 @@ object Inference extends Enumeration {
     Axiom,
     Assume,
     Refl, Sym, Trans,
+    Conv,
+    SymRule,
     RemoveSym,
     Subst, Factor, Resolve,
     Equality, Irreflexive = Inference
@@ -47,8 +49,8 @@ object Inference extends Enumeration {
 
 class Thm[V,F,P] private (
   theClause: Set[Literal[V,F,P]],
-  rule:      Inference.type,
-  preds:     List[Thm[V,F,P]])(implicit
+  theRule:   Inference.type,
+  thePreds:  List[Thm[V,F,P]])(implicit
     ordV: Order[V],
     ordF: Order[F],
     ordP: Order[P]) {
@@ -58,6 +60,8 @@ class Thm[V,F,P] private (
   type Clause = Set[Literal[V,F,P]]
 
   val clause = theClause
+  val preds  = thePreds
+  val rule   = theRule
 
   def isTautology: Boolean = {
     clause.foldLeft(new TreeSet[Literal[V,F,P]]()) {
@@ -81,7 +85,7 @@ class Thm[V,F,P] private (
 object Thm {
   /** A logical kernel for resolution proving according based on total orders of the
     * three alphabets. */
-  class Kernel[V,F,P](implicit
+  sealed class Kernel[V,F,P](implicit
     ordV: Order[V],
     ordF: Order[F],
     ordP: Order[P]) {
@@ -125,16 +129,16 @@ object Thm {
       *       C ∨ D
       */
     def resolve(lit: Literal[V,F,P], thm1: Thm[V,F,P], thm2: Thm[V,F,P]):
-        Option[Thm[V,F,P]] = {
+        Thm[V,F,P] = {
       val negLit = lit.negate
       // Could push check onto caller for possible optimisation
       if (thm1.clause.contains(lit) && thm2.clause.contains(negLit)) {
-        Some(mkThm(
+        mkThm(
           (thm1.clause - lit) ++ (thm2.clause - negLit),
           Inference.Resolve,
-          List(thm1,thm2)))
+          List(thm1,thm2))
       }
-      else None
+      else throw new Error("Resolve")
     }
 
     /**     C
@@ -171,7 +175,7 @@ object Thm {
         Inference.Irreflexive,
         List(thm))
 
-    /**  (x = y) ∨ (y = x) ∨ P
+    /**  (x = y) ∨ (y = x) ∨ C
       *  ----------------------- removeSym
       *            C
       */
@@ -184,6 +188,96 @@ object Thm {
         },
         Inference.RemoveSym,
         List(thm))
+
+    private def repeat[A](f: A => Option[A], x: A): A = {
+      f(x) match {
+        case None    => x
+        case Some(y) => repeat(f,y)
+        }
+    }
+
+    private def repeatTopDownConv(
+      tm: Term[V,F],
+      conv: Term[V,F] => Option[(Term[V,F], Thm[V,F,P])]):
+        Option[(Term[V,F], Set[Literal[V,F,P]], Set[Thm[V,F,P]])] = {
+      val (newTm, topClause, topDeps, topSuccess) =
+        repeat ({ acc:(Term[V,F],Set[Literal[V,F,P]],Set[Thm[V,F,P]],Boolean) =>
+          val (tm,clause,deps,_) = acc
+          conv(tm).map {
+            case (newTm, thm) =>
+              val eql = Literal[V,F,P](true,Eql(tm,newTm))
+              if (thm.clause.contains(eql))
+                (newTm, clause | thm.clause - eql, deps + thm,true)
+              else throw new Error("Invalid conversion")
+          }
+          }, (tm,Set[Literal[V,F,P]](),Set[Thm[V,F,P]](),false))
+      val (newTm2, clause, deps, anySuccess) =
+        newTm match {
+          case Var(_) => (newTm, topClause, topDeps, false)
+          case Fun(f,args) =>
+            val (newArgs, newArgsClause, newArgsDeps, anySuccess) =
+              args.foldRight((List[Term[V,F]](),topClause,topDeps,false)) {
+                case (arg,(restArgs,restClause,restDeps,anySuccess)) =>
+                  repeatTopDownConv(arg,conv) match {
+                    case Some((newArg,argClause,argDeps)) =>
+                      (newArg::restArgs, argClause | restClause, argDeps | restDeps, true)
+                    case None => (arg::restArgs, restClause, restDeps, anySuccess)
+                  }
+              }
+            (Fun(f,newArgs), newArgsClause, newArgsDeps, anySuccess)
+        }
+      if (anySuccess) {
+        repeatTopDownConv(newTm2, conv) match {
+          case None => Some(newTm2, clause, deps)
+          case fix  => fix
+        }
+      }
+      else if (topSuccess)
+        Some(newTm2, clause, deps)
+      else None
+    }
+
+    private def repeatTopDownConvAtom(
+      atm: Atom[V,F,P],
+      conv: Term[V,F] => Option[(Term[V,F], Thm[V,F,P])]):
+        Option[(Atom[V,F,P], Set[Literal[V,F,P]], Set[Thm[V,F,P]])] = {
+      atm match {
+        case Eql(x,y) =>
+          for (
+            (x2,eqlClause,eqlDeps)   <- repeatTopDownConv(x,conv);
+            (y2,eqlClause2,eqlDeps2) <- repeatTopDownConv(y,conv);
+            newClause = eqlClause | eqlClause2;
+            newDeps   = eqlDeps   | eqlDeps2)
+          yield (Eql[V,F,P](x2,y2), newClause, newDeps)
+        case Pred(p,args) =>
+          args.foldRightM(List[Term[V,F]](),Set[Literal[V,F,P]](),Set[Thm[V,F,P]]()) {
+            case (arg, (restArgs,accClause,accDeps)) =>
+              for ((newArg,newAccClause,newAccDeps) <- repeatTopDownConv(arg,conv))
+              yield (newArg::restArgs,newAccClause,newAccDeps)
+          }.map { case (newArgs,newArgsClause,newArgsDeps) =>
+              (Pred(p,newArgs),newArgsClause,newArgsDeps) }
+      }
+    }
+
+    /**
+      *  -------- repeatTopDownConv P conv
+      *   ~P v P'
+      *
+      *  where P' is the result of repeatedly traversing P, applying the
+      *  conversion conv to every subterm until the conversion fails.
+      */
+    def repeatTopDownConvRule(
+      lit:  Literal[V,F,P],
+      conv: Term[V,F] => Option[(Term[V,F], Thm[V,F,P])]) = {
+      repeatTopDownConvAtom(lit.atom,conv).map {
+        case (newAtm, convClause, convDeps) =>
+          new Thm(
+            convClause + Literal(!lit.polarity,lit.atom) + Literal(lit.polarity,newAtm),
+            Inference.Conv,
+            convDeps.toList
+            )
+      }
+    }
 
     def isUnit(thm: Thm[V,F,P]) =
       thm match {
@@ -203,7 +297,7 @@ object Thm {
 object UnitThm {
   def unapply[V,F,P](thm: Thm[V,F,P]): Option[Literal[V,F,P]] = {
     val (unit,rest) = thm.clause.toIterable.splitAt(1)
-    unit match {
+    unit.toList match {
       case List()                  => None
       case unit::_ if rest.isEmpty => Some(unit)
       case _                       => None
@@ -227,45 +321,4 @@ object NeqLit {
       case (false,Eql(l,r)) => Some(l,r)
       case _                => None
     }
-}
-
-/** Derived rules */
-object Rule {
-  /** A set of derived rules based on orderings of the three alphabets.  */
-  def derived[V,F,P](implicit
-    ordV: Order[V],
-    ordF: Order[F],
-    ordP: Order[P]) = new {
-    val k = new Thm.Kernel[V,F,P]
-
-    // No support for typed vars as yet (do we care about them for pp?)
-    /** ~(v = t) ∨ C
-      *  ------------ expandAbbrevs
-      *     C[t/v]
-      */
-    def expandAbbrevs(thm: Thm[V,F,P]) = {
-      val firstSubst =
-        thm.clause.toIterator.map {
-          case NeqLit(l,r) if l != r => Term.termUnify(PartialFunction.empty,l,r)
-          case _                     => None
-        }.find (_.isDefined).flatten
-      firstSubst.map(k.subst(_: Term.Subst[V,F],thm)).getOrElse(k.removeIrrefl(thm))
-    }
-
-    /** Simplify: chuck out if its a tautology. Otherwise expand all abbreviations
-      * until a fixpoint is reached.
-      *
-      */
-    def simplify(thm: Thm[V,F,P]): Option[Thm[V,F,P]] = {
-      if (thm.isTautology) {
-        None
-      }
-      else {
-        if (thm == k.removeSym(expandAbbrevs(thm))) {
-          Some(thm)
-        }
-        else simplify(thm)
-      }
-    }
-  }
 }
