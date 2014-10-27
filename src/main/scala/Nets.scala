@@ -156,8 +156,10 @@ object Nets {
     private def matches[V](args: List[Term[V,F]],net:TermNetImpl[F,A]): List[A] =
       (args,net) match {
         case (List(),Result(xs)) => xs
-        case (arg::args,Stem(pat,net2)) if termMatchesQPat(arg,pat) =>
-          matches(args,net2)
+        case (arg::args,Stem(pat,net2)) =>
+          if (termMatchesQPat(arg,pat))
+            matches(args,net2)
+          else List()
         case (arg::args,Branch(vnet,fmap)) =>
           val vresults = vnet.map(matches(args,_)).getOrElse(List())
           val fresults = arg match {
