@@ -62,7 +62,7 @@ object Term {
       case (Var(v),tm) =>
         theta.lift(v) match {
           case None => Some(theta orElse (mapping(v,tm)))
-          case img  => for { theTm <- img if tm  == theTm } yield theta
+          case img  => for ( theTm <- img if tm == theTm ) yield theta
         }
       case (Fun(f1,args1), Fun(f2,args2))
           if f1 == f2 && args1.length == args2.length =>
@@ -169,7 +169,7 @@ class KnuthBendix[V,F](funWeight: Fun[V,F] => Int)(implicit
   ordInt: Order[Int], ordV: Order[V], ordF: Order[F], ordFun: Order[Fun[V,F]]) {
 
   /** Add weight to a term, so that it can be compared. */
-  case class WTerm(tm:Term[V,F]) {
+  private case class WTerm(tm:Term[V,F]) {
     val weight = Weight.fromTerm(tm,funWeight)
     def weightOf(tm: Term[V,F]) = Weight.fromTerm(tm,funWeight)
     def kbOrder(otherTm: WTerm) = {
@@ -236,6 +236,13 @@ class KnuthBendix[V,F](funWeight: Fun[V,F] => Int)(implicit
         weightCmp(this.tm,otherTm.tm)
     }
   }
-  def tryCompare(tm1: WTerm, tm2: WTerm) =
-      tm1.kbOrder(tm2)
+  def tryCompare(tm1: Term[V,F], tm2: Term[V,F]) =
+      WTerm(tm1).kbOrder(WTerm(tm2))
+}
+
+object KnuthBendix {
+  def kbo[V,F](implicit
+  ordInt: Order[Int], ordV: Order[V], ordF: Order[F], ordFun: Order[Fun[V,F]]) = {
+    new KnuthBendix[V,F](_ => 1)
+  }
 }
