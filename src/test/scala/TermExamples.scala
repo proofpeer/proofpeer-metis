@@ -43,10 +43,7 @@ class TermSpec extends FlatSpec {
   def rewrite(net: TermNet, lit: StringLit) = {
     kernel.repeatTopDownConvRule(
       lit,
-      { tm =>
-        System.out.println("try: " + tm)
-        System.out.println("matches: " + (net.matches(tm).length > 0))
-        net.matches(tm).map {_.apply(tm)}.flatten.headOption })
+      { tm => net.matches(tm).map {_.apply(tm)}.flatten.headOption })
   }
 
   def concatStrings(string: List[String]) = {
@@ -78,15 +75,24 @@ class TermSpec extends FlatSpec {
   }
 
   def ppThm(thm: StringThm): String = {
-    concatStrings(thm.clause.toList.map(ppLit(_)).intersperse("\n ∨"))
+    concatStrings(thm.clause.toList.map(ppLit(_)).intersperse("\n ∨ "))
   }
 
   var rewrNet:TermNet = new Nets.TermNet()
   rewrNet = addRewrite(kernel.axiom(Set() +
     parseLit("Plus(x,Zero) = x").get +
-    parseLit("~Cool").get), rewrNet)
+    parseLit("~PlusId").get), rewrNet)
+  rewrNet = addRewrite(kernel.axiom(Set() +
+    parseLit("Times(x,Zero) = Zero").get +
+    parseLit("~TimesZero").get), rewrNet)
+  rewrNet = addRewrite(kernel.axiom(Set() +
+    parseLit("Times(x,One) = x").get +
+    parseLit("~TimesId").get), rewrNet)
 
-  val lit1 = parseLit("P(Plus(x,Plus(y,Zero)))").get
-  for ( lit <- rewrite(rewrNet,lit1).map(_.clause).toList.flatten )
-    System.out.println(ppLit(lit))
+  val lit1 = parseLit("P(Plus(x,Times(y,Times(Zero,One))))").get
+  val rewrLit1 = rewrite(rewrNet,lit1)
+  System.out.println(rewrLit1.map(ppThm(_)))
+  System.out.println(rewrLit1.map(_.rule))
+  for ( pred <- rewrLit1.map(_.preds).toList.flatten )
+    System.out.println(ppThm(pred))
 }

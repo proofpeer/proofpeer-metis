@@ -220,7 +220,9 @@ object Thm {
                 case (arg,(restArgs,restClause,restDeps,anySuccess)) =>
                   repeatTopDownConv(arg,conv) match {
                     case Some((newArg,argClause,argDeps)) =>
-                      (newArg::restArgs, argClause | restClause, argDeps | restDeps, true)
+                      (newArg::restArgs,
+                        argClause | restClause,
+                        argDeps | restDeps, true)
                     case None => (arg::restArgs, restClause, restDeps, anySuccess)
                   }
               }
@@ -229,7 +231,10 @@ object Thm {
       if (anySuccess) {
         repeatTopDownConv(newTm2, conv) match {
           case None => Some(newTm2, clause, deps)
-          case fix  => fix
+          case fix  => fix.map {
+            case (fixTm, fixClause, fixDeps) =>
+              (fixTm, clause | fixClause, fixDeps | deps)
+          }
         }
       }
       else if (topSuccess)
@@ -250,10 +255,16 @@ object Thm {
             newDeps   = eqlDeps   | eqlDeps2)
           yield (Eql[V,F,P](x2,y2), newClause, newDeps)
         case Pred(p,args) =>
-          args.foldRightM(List[Term[V,F]](),Set[Literal[V,F,P]](),Set[Thm[V,F,P]]()) {
+          args.foldRightM(
+            List[Term[V,F]](),
+            Set[Literal[V,F,P]](),
+            Set[Thm[V,F,P]]()) {
             case (arg, (restArgs,accClause,accDeps)) =>
               for ((newArg,newAccClause,newAccDeps) <- repeatTopDownConv(arg,conv))
-              yield (newArg::restArgs,newAccClause,newAccDeps)
+              yield (
+                newArg::restArgs,
+                newAccClause | accClause,
+                newAccDeps | newAccDeps)
           }.map { case (newArgs,newArgsClause,newArgsDeps) =>
               (Pred(p,newArgs),newArgsClause,newArgsDeps) }
       }
@@ -272,7 +283,9 @@ object Thm {
       repeatTopDownConvAtom(lit.atom,conv).map {
         case (newAtm, convClause, convDeps) =>
           new Thm(
-            convClause + Literal(!lit.polarity,lit.atom) + Literal(lit.polarity,newAtm),
+            convClause +
+              Literal(!lit.polarity,lit.atom)
+              + Literal(lit.polarity,newAtm),
             Inference.Conv,
             convDeps.toList
             )
