@@ -27,8 +27,14 @@ class TermSpec extends FlatSpec {
   type StringLit = Literal[String,String,String]
   type StringThm = Thm[String,String,String]
   type QSubst = PartialFunction[String,Term[Unit,(String,Int)]]
-  type TermNet = Nets.TermNet[String, StringTerm => Option[(StringTerm,StringThm)]]
+  type Conv = StringTerm => Option[(StringTerm,StringThm)]
+  type TermNet = Nets.TermNet[String, Conv]
 
+  // Remember that Term.termMatch overmatches. Should we check in the conversion and
+  // return None as appropriate, or let this be handled in repeatTopDownConvRule?
+  // I'd prefer the former for now, even if it leads to duplicate code. I'd rather
+  // enforce the rule that invalid conversions do not silently fail, but are
+  // regarded as errors.
   def addRewrite(eq: StringThm, net: TermNet) = {
     val Literal(true,Eql(lhs,rhs)) = eq.clause.filter {
       case Literal(true,Eql(_,_)) => true
@@ -69,7 +75,7 @@ class TermSpec extends FlatSpec {
   }
 
   def ppLit(lit: StringLit): String = {
-    (if (!lit.polarity)
+    (if (!lit.isPositive)
       "~"
     else "") + ppAtom(lit.atom)
   }
@@ -91,8 +97,4 @@ class TermSpec extends FlatSpec {
 
   val lit1 = parseLit("P(Plus(x,Times(y,Times(Zero,One))))").get
   val rewrLit1 = rewrite(rewrNet,lit1)
-  System.out.println(rewrLit1.map(ppThm(_)))
-  System.out.println(rewrLit1.map(_.rule))
-  for ( pred <- rewrLit1.map(_.preds).toList.flatten )
-    System.out.println(ppThm(pred))
 }

@@ -46,13 +46,22 @@
     Algorithm
     1. If no clause is returned after simplification, then no clauses are returned.
     2. If the clause is a contradiction, then return it as the derived clause.
-    3. If the clause has been simplified, then factor through the active set, and return the result.
+    3. If the clause has been simplified, then factor the clause, and return any
+       factorings.
     4. If no simplification occurred, then add the clause to the active set. Next, create a version of the clause with fresh variables (side-effect on the global name count), and carry out deductions. Factor the deductions through the active set, and return the result.
-*** Factoring
 *** Deduction
 **** Deduce resolution
 **** Paramodulation with largest subterms (as a net) and equations on the results
 **** Paramodulation into equations with the largest subterms (as a net)
+*** Factoring
+**** Try to simplify each new clause
+**** For each clause that is not deleted by simplification:
+     1) Obtain all substitutions which factor the clause of largest literals in the clause, and apply these.
+     2) Sort these so that contradictions come first, unit equalities next, then unit theorems, then everything else by number of literals.
+     3) Go through the list, and add each element to the active set whenever it is not deleted by simplification, extending the rewriter and subsumption checker.
+     4) Interreduce the rewrite system.
+     5) Extract any theorems can be reduced by any new rewrite rules, and run these
+        through the factoring loop.
 *** REWRITER
 **** datatype
    - A reduction order (defaulted externally to KBO)
@@ -74,7 +83,47 @@
      3. If the negated equality is changed, add it back in the map. Otherwise put it with the other literals.
      4. Go to 1 until there are no more changes.
   4. Use the rewrite from step 3.2 above across all the literals not in the map. (this doesn't sound right, or is at least inefficient. Why bother rewriting the formerly negated equalities, given that we know these have been fully normalised?)
+***** Inter-reduction
+   1. Is there a known, oriented equation in the todo set, favouring oriented equations?
+      a. YES: reduce1 and loop, passing "false" as new
+      b. NO:  If there such an equation in the waiting set?
+         i. YES: reduce1 and loop, passing "true" as new
+         ii. NO: Rebuild
+             1. Remove all redexes not added to rpl (the new set of redexes)
+             2. Go through all redexes added to rpl, and, if unknown, add them to known
+             3. Remove all subterms not added to spl (the new set of subterms)
+             4. Go through all ids added to spl, and if unknown, add all the subterms of the equation with that id.
+   2. reduce1
+      1. Rewrite the equation with the rewrite system
+      2. If equations are not identical and, assuming equation was oriented, redexes are not the same, add the equation id to a new set of redexes (rpl)
+      3. If new is "false", meaning we came from todo, and the equations are not identical, then add the equation id to a new set of subterms (spl)
+      4. If we did not come from "todo" or equations are not identical, add the id to changed. (probably just be for debugging. Gets checked for null at the end, but result is discarded).
+      5. Get the new orientation (don't bother computing a term-order if the redexes are the same, since in that case, the orientation can't have changed).
+      6. If both sides have become equal, delete the equation from known.
+      7. Otherwise, if we came from waiting or the redexes have changed, find reducibles
+         1. Find all subterms from the other equations which match the redex of the given equation (either side if not oriented) in the subterm net. Discard those which come from equations already on the "todo" list. Presumably because term-nets overmatch, grab the concrete term in the equation and make sure that it does match and that it reduces the term ordering. If so, add it to the "todo" list.
+         2. 
+      8. If the equations are not identical, replace the new equation in known
+      9. If the redexes have changed, add the new redex into redexes
+     10. If we came from "waiting" and the equations are not identical, add its subterms to the net
 
-  
+* Factor rule
+** Accumulate the factoring substitutions, until agenda of edges is empty.
+** Agenda element:
+     apart list
+     substitution
+     edge list
+** Pop an element from the agenda
+** If the edge list is empty, add the substitution to the accumulator.
+** Given the next edge on the edge list, try to join the edge using the substitution. If: 
+   1) the edge is joinable using a more specific substitution, add the following element to the agenda:
+         apart list + joinable edge
+         original substitution
+         other edges in the original element
+      Update the apart list with the more specific substitution. If this fails, continue. If it succeeds, add the new apart list, the more specific substitution, and the other edges to the agenda.
+   2) if the edge is not joinable, continue
 
-  
+** Join-edge
+*** unify the two ends of the edge. If this is not possible, then return APART. If the substitution is the same, return JOINED. Otherwise, return JOINABLE of the new substitution.
+** Update-apart
+*** Go through the edges of the apart list, joining the edges with the new substitution. If JOINED is ever returned, then fail. If APART is returned, drop the edge. If JOINABLE is returned, keep the edge.

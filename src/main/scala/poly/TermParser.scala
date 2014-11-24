@@ -5,7 +5,7 @@ import scala.language.implicitConversions
 import scala.util.parsing.combinator.syntactical._
 import scala.util.parsing.combinator.lexical._
 import scalaz._
-import scalaz.std._
+import Scalaz._
 
 class TermParser extends StandardTokenParsers {
   lexical.reserved   += ("Fn","Var","SOME","NONE","LESS","EQUAL","GREATER")

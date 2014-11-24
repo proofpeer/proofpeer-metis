@@ -10,9 +10,112 @@ import Scalaz._
   * @tparam V The alphabet from which variable names are drawn
   * @tparam F The alphabet from which functor names are drawn
   */
-abstract sealed class Term[V,F]
-case class Var[V,F](v: V) extends Term[V,F]
-case class Fun[V,F](f: F, args: List[Term[V,F]]) extends Term[V,F]
+abstract sealed class Term[V,F](implicit ordV: Order[V])
+    extends GenTerm[V,Term[V,F],Term[V,F]] {
+  def freeIn(v: V): Boolean = {
+    this match {
+      case Var(v_) => v == v_
+      case Fun(_,args) => args.exists(_.freeIn(v))
+    }
+  }
+
+  def frees: Set[V] = {
+    this match {
+      case Fun(_,args) =>
+        args.foldLeft(Set[V]()) {
+          case (fvs,arg) => fvs union arg.frees
+        }
+      case Var(v)      => Set(v)
+    }
+  }
+
+  def patMatch(θ: Subst[V,Term[V,F]],term: Term[V,F]): List[Subst[V,Term[V,F]]] = {
+    (this,term) match {
+      case (Var(v),tm) => θ.bind(v,tm).toList
+      case (Fun(f1,args1), Fun(f2,args2))
+          if f1 == f2 && args1.length == args2.length =>
+        (args1 zip args2).foldLeftM(θ) {
+          (θ, args) => {
+            args match {
+              case (arg1,arg2) => arg1.patMatch(θ,arg2)
+            }
+          }
+        }
+      case _ => List()
+    }
+  }
+
+  def unify(θ: Subst[V,Term[V,F]],otherTerm: Term[V,F]): List[Subst[V,Term[V,F]]] = {
+    (this,otherTerm) match {
+      case (Var(v1),Var(v2)) if v1 == v2 => List(θ)
+      case (Var(v),_) if otherTerm.freeIn(v) => List()
+      case (Var(v),_) =>
+        θ.lift(v) match {
+          case None =>
+            val otherTerm_ = otherTerm.subst(θ)
+            if (this == otherTerm_)
+              List(θ)
+            else {
+              val vMapping = Subst.empty[V,Term[V,F]].bind(v,otherTerm_).get
+              val θ2 = θ.map { _.subst(vMapping) }
+              List(θ2.bind(v,otherTerm_).get)
+            }
+          case Some(bndTerm) => bndTerm.unify(θ,otherTerm)
+        }
+      case (_,v@Var(_)) => v.unify(θ,this)
+      case (Fun(f1,args1),(Fun(f2,args2)))
+          if f1 == f2 && args1.length == args2.length =>
+        (args1 zip args2).foldLeftM(θ) {
+          (θ, args) => {
+            args match {
+              case (arg1,arg2) => arg1.unify(θ,arg2)
+            }
+          }
+        }
+    }
+  }
+
+  // Removed optimisations from the SML:
+  //   * In Hurd's, a substitution is a map and can be checked for emptiness, in
+  //     which case the term is not traversed. We could go with this, but would have
+  //     to use a more specific type than PartialFunction to represent θ.
+  //   * As in much of the HOL Light kernel code, terms are not reconstructed if
+  //     the constructor arguments are pointer-equal. Could go for this without
+  //     having to change any types.
+  def subst(θ: Subst[V,Term[V,F]]) = {
+    def sub(term: Term[V,F]): Term[V,F] = {
+      term match {
+        case Var(v)      => θ.lift(v).getOrElse(term)
+        case Fun(f,args) => Fun(f,args.map(sub))
+      }
+    }
+    sub(this)
+  }
+
+  def subtermAt(path: Term.Path): Term[V,F] = {
+    (this,path) match {
+      case (_, List())          => this
+      case (Fun(_,args), n::ns) => args(n).subtermAt(ns)
+      case (Var(_), _::_)       =>
+        throw new IllegalArgumentException("No such subterm.")
+    }
+  }
+
+  def allSubterms: List[(Term.Path,Term[V,F])] = {
+    (List(),this) :: (this match {
+      case Fun(_,args) =>
+        for (
+          (arg,i)           <- args.zipWithIndex;
+          (path,argSubterm) <- arg.allSubterms)
+        yield (i::path, argSubterm)
+      case _           => List()
+    })
+  }
+}
+
+case class Var[V,F](v: V)(implicit ordV: Order[V]) extends Term[V,F]
+case class Fun[V,F](f: F, args: List[Term[V,F]])(implicit ordV: Order[V])
+    extends Term[V,F]
 
 object TermInstances {
   implicit def OrdTerm[V,F](implicit
@@ -31,86 +134,7 @@ object TermInstances {
 }
 
 object Term {
-  type Subst[V,F] = PartialFunction[V,Term[V,F]]
-  private def mapping[V,F](x:V, y:Term[V,F])(implicit ord: Order[V]) = {
-    implicit val ordV = ord.toScalaOrdering
-    new TreeMap() + (x → y)
-  }
-
-  // Removed optimisations from the SML:
-  //   * In Hurd's, a substitution is a map and can be checked for emptiness, in
-  //     which case the term is not traversed. We could go with this, but would have
-  //     to use a more specific type than PartialFunction to represent theta.
-  //   * As in much of the HOL Light kernel code, terms are not reconstructed if
-  //     the constructor arguments are pointer-equal. Could go for this without
-  //     having to change any types.
-  def subst[V,F](theta: Subst[V,F],term: Term[V,F]) = {
-    def sub(term: Term[V,F]): Term[V,F] = {
-      term match {
-        case Var(v)      => theta.lift(v).getOrElse(term)
-        case Fun(f,args) => Fun(f,args.map(sub))
-      }
-    }
-    sub(term)
-  }
-
-  def termMatch[V,F](
-    theta: Subst[V,F],
-    term1: Term[V,F],
-    term2: Term[V,F])(implicit ordV: Order[V]): Option[Subst[V,F]] = {
-    (term1,term2) match {
-      case (Var(v),tm) =>
-        theta.lift(v) match {
-          case None => Some(theta orElse (mapping(v,tm)))
-          case img  => for ( theTm <- img if tm == theTm ) yield theta
-        }
-      case (Fun(f1,args1), Fun(f2,args2))
-          if f1 == f2 && args1.length == args2.length =>
-        (args1 zip args2).foldLeftM(theta) {
-          (theta:Subst[V,F], args:(Term[V,F],Term[V,F])) => {
-            args match {
-              case (arg1,arg2) => termMatch(theta,arg1,arg2)
-            }
-          }
-        }
-      case _ => None
-    }
-  }
-
-  def freeIn[V,F](
-    v: V,
-    term: Term[V,F]): Boolean = {
-    term match {
-      case Var(v_) => v == v_
-      case Fun(_,args) => args.exists(freeIn(v,_))
-    }
-  }
-
-  def termUnify[V,F](
-    theta: Subst[V,F],
-    term1: Term[V,F],
-    term2: Term[V,F])(implicit ordV: Order[V]): Option[Subst[V,F]] = {
-    (term1,term2) match {
-      case (Var(v1),Var(v2)) if v1 == v2 => Some(theta)
-      case (Var(v),_) if freeIn (v,term2) => None
-      case (Var(v),_) =>
-        theta.lift(v) match {
-          case None =>
-            Some (mapping(v,term2) andThen { term => subst(theta,term) })
-          case Some(term) => termUnify(theta,term,term2)
-        }
-      case (_,Var(v)) => termUnify(theta,term2,term1)
-      case (Fun(f1,args1),(Fun(f2,args2)))
-          if f1 == f2 && args1.length == args2.length =>
-        (args1 zip args2).foldLeftM(theta) {
-          (theta, args) => {
-            args match {
-              case (arg1,arg2) => termMatch(theta,arg1,arg2)
-            }
-          }
-        }
-    }
-  }
+  type Path = List[Int]
 }
 
 case class Weight[V] private (nameMap : Map[V,Int], c: Int) {
@@ -138,7 +162,7 @@ object Weight {
 
   def fromTerm[V,F](
     tm: Term[V,F],
-    funWeight: Fun[V,F] => Int)(implicit
+    funWeight: (F,Int) => Int)(implicit
     ordV: Order[V]) = {
     def wt(w: Weight[V],tms: List[Term[V,F]]): Weight[V] =
       tms match {
@@ -150,10 +174,10 @@ object Weight {
                 case (_,n) => n+1
               },w.c+1),
             tms)
-        case (fun@Fun(f,args))::tms =>
+        case (Fun(f,args))::tms =>
           wt(Weight(
             w.nameMap,
-            w.c + funWeight(fun)),args ++ tms)
+            w.c + funWeight(f,args.length)),args ++ tms)
       }
     implicit val ord = ordV.toScalaOrdering
     wt(Weight(new TreeMap[V,Int],-1),List(tm))
@@ -165,7 +189,7 @@ object Weight {
   * @param funWeight An arbitrary weighting of functor names. Defaults to a constant
   * function in METIS.
   */
-class KnuthBendix[V,F](funWeight: Fun[V,F] => Int)(implicit
+class KnuthBendix[V,F](funWeight: (F,Int) => Int)(implicit
   ordInt: Order[Int], ordV: Order[V], ordF: Order[F], ordFun: Order[Fun[V,F]]) {
 
   /** Add weight to a term, so that it can be compared. */
@@ -243,6 +267,6 @@ class KnuthBendix[V,F](funWeight: Fun[V,F] => Int)(implicit
 object KnuthBendix {
   def kbo[V,F](implicit
   ordInt: Order[Int], ordV: Order[V], ordF: Order[F], ordFun: Order[Fun[V,F]]) = {
-    new KnuthBendix[V,F](_ => 1)
+    new KnuthBendix[V,F]( { (_,_) => 1 } )
   }
 }

@@ -7,7 +7,7 @@ import scala.util.parsing.combinator.syntactical._
 import scala.util.parsing.combinator.lexical._
 import scala.util.parsing.combinator.token._
 import scalaz._
-import scalaz.std._
+import Scalaz._
 
 class TermParsers extends StandardTokenParsers {
   lexical.delimiters += ("(",")",",","=","~")

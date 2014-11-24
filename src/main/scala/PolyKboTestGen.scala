@@ -59,7 +59,7 @@ object KboTestCodeGen {
         (fun1.args.length,fun1.f) ?|? (fun2.args.length,fun2.f)
     }
     implicit val ordFun = new ordFun[String,String]
-    val kb = new KnuthBendix[String,String]((_:Fun[String,String]) => 1:Int)
+    val kb = new KnuthBendix[String,String]((_,_) => 1:Int)
     for { (((tm1,tm2),expected),i) <-
       testCases zip
       testResults zip
