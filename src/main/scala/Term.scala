@@ -124,8 +124,8 @@ object TermInstances {
     new Order[Term[V,F]]{
       def order (x:Term[V,F], y:Term[V,F]): Ordering =
         (x,y) match {
-          case (Var(v1),Var(v2)) => ordV(v1,v2)
-          case (Var(_), Fun(_,_))  => Ordering.LT
+          case (Var(v1),Var(v2))  => ordV(v1,v2)
+          case (Var(_), Fun(_,_)) => Ordering.LT
           case (Fun(_,_), Var(_)) => Ordering.GT
           case (Fun(f1,args1),Fun(f2,args2)) =>
             (args1.length,f1,args1) ?|? (args2.length,f2,args2)

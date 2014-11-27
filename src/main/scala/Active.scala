@@ -48,6 +48,17 @@ case class ActiveFactory[
     subterms:    Nets.TermNet[F,(ithmFactory.IThm, Subterm)],
     allSubterms: Nets.TermNet[F,(ithmFactory.IThm, Term[V,F])]) {
 
+    def this() {
+      this(
+        new rewriting.Rewrite(),
+        Map(),
+        new Nets.LiteralNet,
+        new Nets.LiteralNet,
+        new Nets.TermNet(),
+        new Nets.TermNet(),
+        new Nets.TermNet())
+    }
+
     // TODO: Check against original METIS. Hurd accumulates a variable "news", which
     // appears to be built out of the other literals in the unit-theorem being
     // resolved against. Why is this? There shouldn't be any other literals if it is
@@ -116,7 +127,7 @@ case class ActiveFactory[
               .foldLeft(active,List[ithmFactory.IThm]()) {
               // Postsimplify
               case ((active,newThms),thm) => active.simplify(thm) match {
-                case None      => (active,newThms)
+                case None => (active,newThms)
                 case Some(simpedThm@ithmFactory.IThm(
                   id,
                   ithmFactory.kernel.UnitThm(unit))) =>
@@ -130,6 +141,7 @@ case class ActiveFactory[
                     allSubterms)
                   // TODO: Update subsumer
                   (active2, simpedThm::newThms)
+                case Some(simpedThm) => (active,simpedThm::newThms)
               }
             }
         }
@@ -138,11 +150,12 @@ case class ActiveFactory[
       // TODO: Extract rewritable (and probably make tail-recursive)
     }
 
-    def deduceResolution1(lit:Literal[V,F,P], ithm: ithmFactory.IThm) =
+    def deduceResolution1(lit:Literal[V,F,P], ithm: ithmFactory.IThm) = {
       for (
-        (lit2,ithm2) <- literals.unifies(lit);
+        (lit2,ithm2) <- literals.unifies(lit.negate);
         resolvent    <- ithmFactory.resolve(lit, ithm, lit2, ithm2))
       yield resolvent
+    }
 
     def deduceResolutions(ithm: ithmFactory.IThm) = {
       ithm.clause.largestLiterals(litOrder).flatMap {

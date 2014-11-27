@@ -15,9 +15,13 @@ case class WaitingFactory[V,F,P,S,
   type Weight   = Double
   type Distance = Double
 
-  val priorityFactor = Math.pow(10,-12)
+  private val priorityFactor = Math.pow(10,-12)
 
-  class Active private (ithms: SortedMap[Weight,(Distance,ithmFactory.IThm)]) {
+  class Waiting private (ithms: SortedMap[Weight,(Distance,ithmFactory.IThm)]) {
+    def this() {
+      this(SortedMap())
+    }
+
     // TODO: Clauses need to be additionally waited according to model-checking
     def clauseWeight(distance: Double, ithm: ithmFactory.IThm) = {
       val cl          = ithm.clause
@@ -36,11 +40,11 @@ case class WaitingFactory[V,F,P,S,
           val distance_ = distance + Math.log(ithm.clause.lits.size)
           ithms + ( weight → (distance,ithm) )
         }
-      new Active(newIthms)
+      new Waiting(newIthms)
     }
 
     def remove = {
-      ithms.headOption.map(ithm => (new Active(ithms - ithm._1), ithm))
+      ithms.headOption.map(ithm => (new Waiting(ithms - ithm._1), ithm._2))
     }
   }
 }

@@ -81,6 +81,7 @@ object Nets {
           case (θ,(farg,qarg)) =>
             unifiesQTerm(θ,farg,qarg)
         }
+      case _ => None
     }
   }
 
@@ -136,35 +137,10 @@ object Nets {
     net: TermNetImpl[F,A]): List[A] = {
     (args,net) match {
       case (List(),Result(xs)) => xs
-      case (Var(v)::args,net) =>
+      case (arg::args, _) =>
         (for ((nextQtm,net2) <- nextArg(net))
-        yield θ.lift(v) match {
-          case None =>
-            unifiesArgs(
-              θ.orElse(Map() + (v → nextQtm)),
-              args,
-              net2)
-          case Some(qtm) if qtm == nextQtm =>
-            unifiesArgs(θ,args,net2)
-          case _ => List()
-        }).flatten
-      case (arg::args,Stem(qtm,net2)) =>
-        unifiesQTerm(θ,arg,qtm)
-          .map(unifiesArgs(_,args,net2)).getOrElse(List())
-      case ((arg@Fun(f,fargs))::args,Branch(vnet,fnet)) =>
-        val vresults = vnet match {
-          case Some(vnet) =>
-            (for ((nextQtm,net2) <- nextArg(vnet))
-            yield
-              unifiesQTerm(θ,arg,nextQtm)
-              .map(unifiesArgs(_,args,net2)).getOrElse(List())).flatten
-          case None => List()
-        }
-        val fresults = fnet.lift((f,fargs.length)) match {
-          case Some(fnet2) => unifiesArgs(θ,fargs,fnet2)
-          case None        => List()
-        }
-        vresults ++ fresults
+        yield unifiesQTerm(θ,arg,nextQtm)
+          .map(unifiesArgs(_,args,net2)).getOrElse(List())).flatten
       case _ => List()
     }
   }

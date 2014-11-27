@@ -25,7 +25,7 @@ sealed class Kernel[V,F,P](implicit
   case class Rewrite[V,F,P](p: Term.Path, eq:Thm) extends Inference
   case class RemoveSym[V,F,P](thm: Thm) extends Inference
   case class Conv[V,F,P](thm: List[Thm]) extends Inference
-  case class InfSubst() extends Inference
+  case class InfSubst(θ: Subst[V,Term[V,F]]) extends Inference
   case class Factor() extends Inference
   case class Resolve[V,F,P](pos: Thm, neg: Thm) extends Inference
   case class Equality() extends Inference
@@ -77,7 +77,7 @@ sealed class Kernel[V,F,P](implicit
   def subst(θ: Subst[V,Term[V,F]], thm: Thm): Thm =
     // For now, removing optimisation where, if the entire clause is unchanged, we
     // do not return a newly constructed clause.
-    new Thm(Clause(thm.clause.subst(θ)),InfSubst())
+    new Thm(Clause(thm.clause.subst(θ)),InfSubst(θ))
 
   // Derived rules in Hurd. Primitive here.
   // ======================================
@@ -94,26 +94,32 @@ sealed class Kernel[V,F,P](implicit
     *  ------------------- removeIrrefl
     *           C
     */
-  def removeIrrefl(thm: Thm): Thm =
-    new Thm(
-      Clause(thm.clause.filter {
+  def removeIrrefl(thm: Thm): Thm = {
+    val newCl = thm.clause.filter {
         case IrreflLit(_) => false
         case _            => true
-      }),
-      Irreflexive(thm))
+    }
+    if (newCl == thm.clause.lits) {
+      thm
+    }
+    else new Thm(Clause(newCl), Irreflexive(thm))
+  }
 
   /**  (x = y) ∨ (y = x) ∨ C
     *  ----------------------- removeSym
     *            C
     */
-  def removeSym(thm: Thm): Thm =
-    new Thm(
-      Clause(thm.clause.distinctBy {
+  def removeSym(thm: Thm): Thm = {
+    val newCl = thm.clause.distinctBy {
         case (Literal(p1,Eql(x1,y1)),Literal(p2,Eql(x2,y2))) =>
           x1 == y2 && x2 == y1 && p1 == p2
         case _ => false
-      }),
-      RemoveSym(thm))
+    }
+    if (newCl == thm.clause.lits) {
+      thm
+    }
+    else new Thm(Clause(newCl), RemoveSym(thm))
+  }
 
   private def repeatTopDownConv(
     tm: Term[V,F],

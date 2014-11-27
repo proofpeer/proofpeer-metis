@@ -43,7 +43,7 @@ class LiteralOrdering[V,F,P](kbo: KnuthBendix[V,F], predicateFunctor: P=>F)(impl
     kbo.tryCompare(tm1,tm2).map { _ == Ordering.LT }.getOrElse(false)
 
   def notStrictlyLess(tms1: List[Term[V,F]], tms2: List[Term[V,F]]) = {
-    tms1.forall { tm1 =>
+    !tms1.forall { tm1 =>
       tms2.exists { tm2 =>
         strictyLess(tm1,tm2)
       }
