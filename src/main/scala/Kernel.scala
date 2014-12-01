@@ -25,10 +25,8 @@ sealed class Kernel[V,F,P](implicit
   case class Rewrite[V,F,P](p: Term.Path, eq:Thm) extends Inference
   case class RemoveSym[V,F,P](thm: Thm) extends Inference
   case class Conv[V,F,P](thm: List[Thm]) extends Inference
-  case class InfSubst(θ: Subst[V,Term[V,F]]) extends Inference
-  case class Factor() extends Inference
+  case class InfSubst(θ: Subst[V,Term[V,F]], thm: Thm) extends Inference
   case class Resolve[V,F,P](pos: Thm, neg: Thm) extends Inference
-  case class Equality() extends Inference
   case class Irreflexive[V,F,P](thm: Thm) extends Inference
 
   case class Thm private[Kernel](clause: Clause[V,F,P], rule: Inference) {
@@ -77,7 +75,7 @@ sealed class Kernel[V,F,P](implicit
   def subst(θ: Subst[V,Term[V,F]], thm: Thm): Thm =
     // For now, removing optimisation where, if the entire clause is unchanged, we
     // do not return a newly constructed clause.
-    new Thm(Clause(thm.clause.subst(θ)),InfSubst(θ))
+    new Thm(Clause(thm.clause.subst(θ)),InfSubst(θ,thm))
 
   // Derived rules in Hurd. Primitive here.
   // ======================================

@@ -100,6 +100,7 @@ class Factor[V,F,P](implicit ordV: Order[V]) {
         atm1.unify(Subst.empty,atm2).map {
           case θ => SubEdge(θ,FactorEdge(atm1,atm2))
         }
+      case _ => List()
     }.flatten[SubEdge]
     initEdges(apart,List() ++ neqSubEdges ++ litSubEdges)
   }
