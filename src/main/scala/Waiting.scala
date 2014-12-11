@@ -29,22 +29,28 @@ case class WaitingFactory[V,F,P,S,
       val litWeight   = litSize + 1
       val freesWeight = cl.frees.size + 1
       val priority    = priorityFactor * ithm.id
-      distance * freesWeight * litWeight +  priority
+
+      distance * cl.size * freesWeight * litWeight + priority
     }
 
     def add(distance: Double, ithms: List[ithmFactory.IThm]) = {
       val newIthms =
         ithms.foldLeft(this.ithms) {
           (ithms,ithm) =>
-          val weight    = clauseWeight(distance, ithm)
           val distance_ = distance + Math.log(ithm.clause.lits.size)
+          val weight    = clauseWeight(distance_, ithm)
           ithms + ( weight → (distance,ithm) )
         }
       new Waiting(newIthms)
     }
 
     def remove = {
-      ithms.headOption.map(ithm => (new Waiting(ithms - ithm._1), ithm._2))
+      ithms.splitAt(1) match {
+        case (head,rest) =>
+          head.headOption.map(ithm => (new Waiting(rest), ithm._2))
+      }
     }
   }
 }
+
+//ResolutionTest.resolves.take(100).foreach { case (waiting,_) => System.out.println(""); waiting.remove.get._2._2.clause.lits.foreach { case lit => System.out.println(TermPrinter.printLiteral(lit)) } }

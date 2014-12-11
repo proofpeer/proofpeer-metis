@@ -75,7 +75,7 @@ case class IThmFactory[V,F,P,S,K <: Kernel[V,F,P]](
       thm1_ = kernel.subst(θ,thm1);
       thm2_ = kernel.subst(θ,thm2);
       if litOrder.isLargerLiteral(thm1_.clause)(lit1_);
-      if litOrder.isLargerLiteral(thm2_.clause)(lit2_);
+      if litOrder.isLargerLiteral(thm2_.clause)(lit2);
       resolvent <- kernel.resolve(lit1_,thm1_,thm2_))
     yield new IThm(newId, resolvent)
   }
