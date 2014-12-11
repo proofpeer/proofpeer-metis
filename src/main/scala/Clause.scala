@@ -1,6 +1,5 @@
 package proofpeer.metis
 
-import AtomInstances._
 import scala.collection.{GenTraversableOnce}
 import scala.collection.immutable._
 import scala.language.implicitConversions
@@ -18,12 +17,14 @@ case class Clause[V,F,P](lits: Set[Literal[V,F,P]])(implicit
   ordP: Order[P]) extends GenTerm[V,Term[V,F],Clause[V,F,P]] {
 
   import LiteralInstances._
+  import AtomInstances._
+  implicit val OrdAtom    = AtomOrder(ordV,ordF,ordP).toScalaOrdering
   implicit val OrdLiteral = LiteralOrder(ordV,ordF,ordP).toScalaOrdering
 
-  def frees = lits.flatMap(_.frees)
-  def freeIn(v: V) = lits.exists(_.freeIn(v))
-  def subst(θ: Subst[V,Term[V,F]]) = new Clause(lits.map(_.subst(θ)))
-  def patMatch(θ: Subst[V,Term[V,F]], cl: Clause[V,F,P]) = {
+  override def frees = lits.flatMap(_.frees)
+  override def freeIn(v: V) = lits.exists(_.freeIn(v))
+  override def subst(θ: Subst[V,Term[V,F]]) = new Clause(lits.map(_.subst(θ)))
+  override def patMatch(θ: Subst[V,Term[V,F]], cl: Clause[V,F,P]) = {
     def patMatchOrdered(θ: Subst[V,Term[V,F]], ordLits: Seq[Literal[V,F,P]]) = {
       (lits zip ordLits).foldLeftM(θ) {
         case (θ, (lit1,lit2)) => lit1.patMatch(θ,lit2)
@@ -34,7 +35,7 @@ case class Clause[V,F,P](lits: Set[Literal[V,F,P]])(implicit
       θ    <- patMatchOrdered(θ, Seq() ++ perm))
     yield θ).toList
   }
-  def unify(θ: Subst[V,Term[V,F]], cl: Clause[V,F,P]) = {
+  override def unify(θ: Subst[V,Term[V,F]], cl: Clause[V,F,P]) = {
     def unifyMatchOrdered(θ: Subst[V,Term[V,F]], ordLits: Seq[Literal[V,F,P]]) = {
       (lits zip ordLits).foldLeftM(θ) {
         case (θ, (lit1,lit2)) => lit1.patMatch(θ,lit2)
@@ -45,18 +46,19 @@ case class Clause[V,F,P](lits: Set[Literal[V,F,P]])(implicit
       θ    <- unifyMatchOrdered(θ, Seq() ++ perm))
     yield θ).toList
   }
+  override def size = lits.map(_.size).sum
 
   def isTautology: Boolean = {
-    lits.foldLeft(new TreeSet[Literal[V,F,P]]()) {
+    lits.foldLeft(new TreeSet[Atom[V,F,P]]()) {
       case (set,lit) =>
         if (lit.isPositive && lit.isRefl) {
           return true
         }
         else {
-          if (set.contains(lit)) {
+          if (set.contains(lit.atom)) {
             return true
           }
-          else set + lit
+          else set + lit.atom
         }
     }
     return false

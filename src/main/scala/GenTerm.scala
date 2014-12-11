@@ -8,29 +8,38 @@ import Scalaz._
   * @tparam V alphabet from which variables are drawn
   * @tparam T type of terms substituted for
   */
-case class Subst[V,T] private(θ: Map[V,T]) extends PartialFunction[V,T] {
-  def isDefinedAt(v: V) = θ.isDefinedAt(v)
-  def apply(v: V) = θ(v)
+case class Subst[V,T] private(θ: V ==>> T)(implicit ordV: Order[V])
+    extends PartialFunction[V,T] {
+  override def isDefinedAt(v: V) = θ.member(v)
+  override def apply(v: V): T = this.lookup(v).get
+
+  def lookup(v: V) = θ.lookup(v)
 
   /** Attempt to add a binding. If the binding already exists, return the same.
       If a different binding to v already exists, return None. */
   def bind(v: V, tm: T): Option[Subst[V,T]] = {
-    θ.get(v) match {
+    θ.lookup(v) match {
       case None                   => Some(Subst(θ + { v → tm }))
       case Some(rhs) if tm == rhs => Some(Subst(θ))
       case _                      => None
     }
   }
 
-  def map[U](f: T => U): Subst[V,U] = {
-    Subst(θ.mapValues(f))
+  def mapRhs[U](f: T => U): Subst[V,U] = {
+    Subst(θ.map(f))
+  }
+
+  def union(σ: Subst[V,T]) : Option[Subst[V,T]] = {
+    Some(Subst((θ unionWithKey σ.θ) {
+      case (v,tm1,tm2) => if (tm1 == tm2) tm1 else return None
+    }))
   }
 }
 
 object Subst {
   def empty[V,T](implicit ordV: Order[V]) = {
     implicit val _ = ordV.toScalaOrdering
-    Subst(TreeMap[V,T]())
+    Subst(==>>.empty[V,T])
   }
 }
 
@@ -40,6 +49,8 @@ trait GenTerm[V,T,GT] { this: GT =>
   def frees: Set[V]
   def freeIn(v: V): Boolean
   def subst(θ: Subst[V,T]): GT
+
+  def size: Int
 
   /** Treat this term as a pattern and match it against term. */
   def patMatch(θ: Subst[V,T], term: GT): List[Subst[V,T]]

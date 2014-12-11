@@ -12,27 +12,29 @@ import TermInstances._
   * @tparam F The alphabet from which functor names are drawn
   * @tparam P The alphabet from which predicate names are drawn
   */
-abstract sealed class Atom[V,F,P](implicit ordV: Order[V])
+abstract sealed class Atom[V,F,P](implicit ordV : Order[V])
     extends GenTerm[V,Term[V,F],Atom[V,F,P]] {
 
-  def frees = this match {
+  override def frees = this match {
     case Pred(_,args) => args.foldLeft(Set[V]()){
       case (fvs,arg) => fvs union arg.frees
     }
     case Eql(l,r) => l.frees union r.frees
   }
 
-  def freeIn(v: V) = this match {
+  override def freeIn(v: V) = this match {
     case Pred(_,args) => args.exists(_.freeIn(v))
     case Eql(l,r)     => l.freeIn(v) || r.freeIn(v)
   }
 
-  def subst(θ: Subst[V,Term[V,F]]) = this match {
-    case Pred(p,args) => Pred(p,args.map(_.subst(θ)))
-    case Eql(l,r)     => Eql(l.subst(θ),r.subst(θ))
+  override def subst(θ: Subst[V,Term[V,F]]): Atom[V,F,P] =
+    this match {
+      case Pred(p,args) => Pred(p,args.map(_.subst(θ)))
+      case Eql(l,r)     => Eql(l.subst(θ),r.subst(θ))
   }
 
-  def patMatch(θ: Subst[V,Term[V,F]], atm: Atom[V,F,P]): List[Subst[V,Term[V,F]]] =
+  override def patMatch(θ: Subst[V,Term[V,F]], atm: Atom[V,F,P]):
+      List[Subst[V,Term[V,F]]] =
     (this,atm) match {
       case (Pred(p1,args1), Pred(p2,args2))
           if p1 == p2 && args1.length == args2.length =>
@@ -44,9 +46,11 @@ abstract sealed class Atom[V,F,P](implicit ordV: Order[V])
           θ <- l1.patMatch(θ,l2);
           θ <- r1.patMatch(θ,r2))
         yield θ
+      case _ => List()
     }
 
-  def unify(θ: Subst[V,Term[V,F]], atm: Atom[V,F,P]): List[Subst[V,Term[V,F]]] =
+  override def unify(θ: Subst[V,Term[V,F]], atm: Atom[V,F,P]):
+      List[Subst[V,Term[V,F]]] =
     (this,atm) match {
       case (Pred(p1,args1), Pred(p2,args2))
           if p1 == p2 && args1.length == args2.length =>
@@ -58,7 +62,13 @@ abstract sealed class Atom[V,F,P](implicit ordV: Order[V])
           θ <- l1.unify(θ,l2);
           θ <- r1.unify(θ,r2))
         yield θ
+      case _ => List()
     }
+
+  override def size = 1 + (this match {
+    case Pred(_,args) => args.map(_.size).sum
+    case Eql(x,y)     => x.size + y.size
+  })
 
   def isRefl = this match {
     case Eql(l,r) => l == r
@@ -73,7 +83,7 @@ case class Eql[V,F,P](l: Term[V,F], r: Term[V,F])(
 }
 
 object AtomInstances {
-  implicit def OrdAtom[V,F,P](implicit
+  implicit def AtomOrder[V,F,P](implicit
     ordV: Order[V],
     ordF: Order[F],
     ordP: Order[P]) = new Order[Atom[V,F,P]] {

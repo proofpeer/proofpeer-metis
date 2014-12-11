@@ -127,3 +127,73 @@
 *** unify the two ends of the edge. If this is not possible, then return APART. If the substitution is the same, return JOINED. Otherwise, return JOINABLE of the new substitution.
 ** Update-apart
 *** Go through the edges of the apart list, joining the edges with the new substitution. If JOINED is ever returned, then fail. If APART is returned, drop the edge. If JOINABLE is returned, keep the edge.
+* Subsumption
+  Clause cl1 subsumes cl2 if there is a substitution θ such that cl1[θ] is a subset of cl2. 
+** Data structure
+   | field   | description                                |
+   |---------+--------------------------------------------|
+   | empty   | a clause, a substitution and an annotation |
+   | unit    | the literal, the clause and an annotation  |
+   | nonunit | structure                                  | 
+
+   We'll simplify empty just down to a boolean. It doesn't need to be filtered. If you prove the empty clause, the search is over.
+
+   | field   | description                                                            |
+   |---------+------------------------------------------------------------------------|
+   | nextId  | a fresh index into clauses                                             |
+   |---------+------------------------------------------------------------------------|
+   | clauses | a map from ints to a clause, the clause's literals suitably sorted,    |
+   |         | and an annotation                                                      |
+   |---------+------------------------------------------------------------------------|
+   | fstLits | a literal net, to a clause id and the number of literals in the clause |
+   |---------+------------------------------------------------------------------------|
+   | sndLits | as fstLits                                                             |
+
+   The annotation is returned by the subsumes function for the first subsuming clause. A hook predicate is provided in subsumption checking to ignore potential subsumers based on this annotation, but by default, the predicate is just "K true". Otherwise, the annotation is used for filtering the subsumption set.
+
+** [[file:~/metis/src/Subsume.sml::fun%20genClauseSubsumes%20pred%20cl'%20lits'%20cl%20a%20%3D][genClauseSubsumes]]
+   :PROPERTIES:
+   :ID:       6fae569b-6eb5-40ce-97b6-8b035278b920
+   :END:
+   | parameter | description                                                   |
+   |-----------+---------------------------------------------------------------|
+   | pred      | Unused. Always defaults to K true                             |
+   | cl'       | The subsuming clause                                          |
+   | lits'     | The literals of cl' as sorted and maintained in nonunit's map |
+   | cl        | The subsumed clause                                           |
+
+   Possibly returns a subsuming substitution.
+*** referenced by
+    - [[id:b515bb2e-c1b1-4593-bb8b-bee63b558c31][genSubsumes]]
+*** Implementation
+    With a substitution as state, writing a list of lists of substitutions, evaluate:
+    1. For each lit', mapMaybe (match lit') across cl. 
+       - If there are no substitutions, fail.
+       - If there is exactly one substitution sub, attempt to modify the saved substitution by forming its *union* with sub. Then continue with the remaining lits'.
+       - If there are multiple substitutions, write them and continue.
+    2. Search for a path through the list of lists of substitutions for a path of substitutions which we can form the union across with the above state.
+**** Notes    
+     The complication of writing both a list of lists of substitutions and a state substitution is an optimisation. We could instead just always write the list of substitutions. Using the extra logic assumes that it is better to compute the union of substitution along all stems and throw out impossibilities before we ever bother to search.
+
+** [[file:~/metis/src/Subsume.sml::fun%20nonunitSubsumes%20pred%20nonunit%20max%20cl%20%3D][genSubsumes]]
+   :PROPERTIES:
+   :ID:       b515bb2e-c1b1-4593-bb8b-bee63b558c31
+   :END:
+   | parameter | description                         |
+   |-----------+-------------------------------------|
+   | max       | size of potentially subsumed clause |
+   | cl        | subsumed clause                     |
+
+   Possibly returns a subsuming substitution.
+*** referenced by
+    - [[id:5a798b4c-1b39-43b6-be8c-0b282a14a78a][genSubsumes]]
+*** Implementation
+   - Go through the literals of all clauses, looking them up in both the fstLits and sndLits nets and filtering out returned clauses which have more literals than the subsumed clause (see [[id:23f6eade-2443-47ed-930e-11dc287b6546][Notes]])
+   - Intersect the candidate clauses, and grab their literals as computed during insertion into the nets. 
+**** Notes
+     :PROPERTIES:
+     :ID:       23f6eade-2443-47ed-930e-11dc287b6546
+     :END:
+     Code is complicated by the possibility of asking for "non-strictness". Strictness means that we don't bother asking whether cl' subsumes cl when cl' has more lits than cl. This is not equivalent, as a factor of cl' might still subsume cl, however, so long as factors are always added to the subsumption set, we are good.
+   
+

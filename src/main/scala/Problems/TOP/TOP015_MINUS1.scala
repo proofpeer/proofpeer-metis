@@ -2,19 +2,19 @@ package proofpeer.metis.testing.tptp.Problems.TOP
 
 import proofpeer.metis.testing.tptp._
 
-object TOP005_MINUS1{
+object TOP015_MINUS1 {
   val mainClauses =
     List(
-      // Name: lemma_1e_1
+      // Name: problem_10_148
       // Role: negated_conjecture
-      List("basis(cx, f)"),
-      // Name: lemma_1e_2
+      List("topological_space(cx, ct)"),
+      // Name: problem_10_149
       // Role: negated_conjecture
-      List("subset_collections(g, top_of_basis(f))"),
-      // Name: lemma_1e_3
+      List("subset_sets(a, cx)"),
+      // Name: problem_10_150
       // Role: negated_conjecture
-      List("~element_of_collection(union_of_members(g), top_of_basis(f))"))
-  
+      List("~equal_sets(intersection_of_sets(interior(a, cx, ct), boundary(a, cx, ct)), empty_set)"))
+
   def clauses =
     Axioms.TOP001_MINUS0.mainClauses ++
       this.mainClauses

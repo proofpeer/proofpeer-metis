@@ -2,19 +2,19 @@ package proofpeer.metis.testing.tptp.Problems.TOP
 
 import proofpeer.metis.testing.tptp._
 
-object TOP015_MINUS1{
+object TOP013_MINUS1 {
   val mainClauses =
     List(
-      // Name: problem_10_148
+      // Name: problem_8_139
       // Role: negated_conjecture
       List("topological_space(cx, ct)"),
-      // Name: problem_10_149
+      // Name: problem_8_140
       // Role: negated_conjecture
       List("subset_sets(a, cx)"),
-      // Name: problem_10_150
+      // Name: problem_8_141
       // Role: negated_conjecture
-      List("~equal_sets(intersection_of_sets(interior(a, cx, ct), boundary(a, cx, ct)), empty_set)"))
-  
+      List("~subset_sets(a, closure(a, cx, ct))","~subset_sets(interior(a, cx, ct), a)"))
+
   def clauses =
     Axioms.TOP001_MINUS0.mainClauses ++
       this.mainClauses

@@ -17,17 +17,19 @@ case class Literal[V,F,P](isPositive: Boolean, atom: Atom[V,F,P])(
     extends GenTerm[V,Term[V,F],Literal[V,F,P]] {
   def negate() = Literal(!this.isPositive, this.atom)
 
-  def frees = atom.frees
-  def freeIn(v: V) = atom.freeIn(v)
-  def subst(θ: Subst[V,Term[V,F]]) = Literal(isPositive,atom.subst(θ))
-  def patMatch(θ: Subst[V,Term[V,F]], lit: Literal[V,F,P]) =
+  override def frees = atom.frees
+  override def freeIn(v: V) = atom.freeIn(v)
+  override def subst(θ: Subst[V,Term[V,F]]) = Literal(isPositive,atom.subst(θ))
+  override def patMatch(θ: Subst[V,Term[V,F]], lit: Literal[V,F,P]) =
     if (isPositive == lit.isPositive)
       atom.patMatch(θ,lit.atom)
     else List()
-  def unify(θ: Subst[V,Term[V,F]], lit: Literal[V,F,P]) =
+  override def unify(θ: Subst[V,Term[V,F]], lit: Literal[V,F,P]) =
     if (isPositive == lit.isPositive)
       atom.unify(θ,lit.atom)
     else List()
+  override def size = atom.size
+
   def isRefl = isPositive && atom.isRefl
 }
 

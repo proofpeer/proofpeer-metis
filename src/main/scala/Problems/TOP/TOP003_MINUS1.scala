@@ -2,16 +2,16 @@ package proofpeer.metis.testing.tptp.Problems.TOP
 
 import proofpeer.metis.testing.tptp._
 
-object TOP006_MINUS1{
+object TOP003_MINUS1 {
   val mainClauses =
     List(
-      // Name: problem_1_110
+      // Name: lemma_1c_1
       // Role: negated_conjecture
-      List("basis(cx, ct)"),
-      // Name: problem_1_111
+      List("basis(cx, f)"),
+      // Name: lemma_1c_2
       // Role: negated_conjecture
-      List("~topological_space(cx, top_of_basis(ct))"))
-  
+      List("~element_of_collection(cx, top_of_basis(f))"))
+
   def clauses =
     Axioms.TOP001_MINUS0.mainClauses ++
       this.mainClauses

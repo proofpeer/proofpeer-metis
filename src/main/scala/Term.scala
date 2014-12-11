@@ -12,14 +12,14 @@ import Scalaz._
   */
 abstract sealed class Term[V,F](implicit ordV: Order[V])
     extends GenTerm[V,Term[V,F],Term[V,F]] {
-  def freeIn(v: V): Boolean = {
+  override def freeIn(v: V): Boolean = {
     this match {
       case Var(v_) => v == v_
       case Fun(_,args) => args.exists(_.freeIn(v))
     }
   }
 
-  def frees: Set[V] = {
+  override def frees: Set[V] = {
     this match {
       case Fun(_,args) =>
         args.foldLeft(Set[V]()) {
@@ -29,7 +29,8 @@ abstract sealed class Term[V,F](implicit ordV: Order[V])
     }
   }
 
-  def patMatch(θ: Subst[V,Term[V,F]],term: Term[V,F]): List[Subst[V,Term[V,F]]] = {
+  override def patMatch(θ: Subst[V,Term[V,F]],term: Term[V,F]):
+      List[Subst[V,Term[V,F]]] = {
     (this,term) match {
       case (Var(v),tm) => θ.bind(v,tm).toList
       case (Fun(f1,args1), Fun(f2,args2))
@@ -45,7 +46,8 @@ abstract sealed class Term[V,F](implicit ordV: Order[V])
     }
   }
 
-  def unify(θ: Subst[V,Term[V,F]],otherTerm: Term[V,F]): List[Subst[V,Term[V,F]]] = {
+  override def unify(θ: Subst[V,Term[V,F]],otherTerm: Term[V,F]):
+      List[Subst[V,Term[V,F]]] = {
     (this,otherTerm) match {
       case (Var(v1),Var(v2)) if v1 == v2 => List(θ)
       case (Var(v),_) if otherTerm.freeIn(v) => List()
@@ -57,7 +59,7 @@ abstract sealed class Term[V,F](implicit ordV: Order[V])
               List(θ)
             else {
               val vMapping = Subst.empty[V,Term[V,F]].bind(v,otherTerm_).get
-              val θ2 = θ.map { _.subst(vMapping) }
+              val θ2 = θ.mapRhs { _.subst(vMapping) }
               List(θ2.bind(v,otherTerm_).get)
             }
           case Some(bndTerm) => bndTerm.unify(θ,otherTerm)
@@ -72,6 +74,7 @@ abstract sealed class Term[V,F](implicit ordV: Order[V])
             }
           }
         }
+      case _ => List()
     }
   }
 
@@ -82,7 +85,7 @@ abstract sealed class Term[V,F](implicit ordV: Order[V])
   //   * As in much of the HOL Light kernel code, terms are not reconstructed if
   //     the constructor arguments are pointer-equal. Could go for this without
   //     having to change any types.
-  def subst(θ: Subst[V,Term[V,F]]) = {
+  override def subst(θ: Subst[V,Term[V,F]]) = {
     def sub(term: Term[V,F]): Term[V,F] = {
       term match {
         case Var(v)      => θ.lift(v).getOrElse(term)
@@ -90,6 +93,14 @@ abstract sealed class Term[V,F](implicit ordV: Order[V])
       }
     }
     sub(this)
+  }
+
+  // Optimise: make tail-recursive
+  override def size: Int = {
+    this match {
+      case Var(x)      => 1
+      case Fun(f,args) => 1 + args.map(_.size).sum
+    }
   }
 
   def subtermAt(path: Term.Path): Term[V,F] = {

@@ -54,10 +54,10 @@ class TermParsers extends StandardTokenParsers {
     }
     yield Eql[String,String,String](lhs,rhs)) |
     (for {
-      id   <- parseUpcaseId
+      id   <- this.ident
       args <- parseArgs
     }
-    yield Pred(id.chars,args))
+    yield Pred(id,args))
   }
 
   val parseLit:Parser[StringLit] = {

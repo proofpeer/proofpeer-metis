@@ -61,10 +61,14 @@ case class IThmFactory[V,F,P,S,K <: Kernel[V,F,P]](
     *
     * (Generates a new theorem id)
     */
-  def resolve(lit1: Literal[V,F,P], ithm1: IThm, lit2: Literal[V,F,P], ithm2: IThm) = {
+  def resolve(
+    lit1: Literal[V,F,P],
+    ithm1: IThm,
+    lit2: Literal[V,F,P],
+    ithm2: IThm) = {
     val thm1  = ithm1.thm
     val thm2  = ithm2.thm
-    val lit2_ = lit2.negate;
+    val lit2_ = lit2.negate
     for (
       θ <- lit1.unify(Subst.empty,lit2_).headOption;
       lit1_ = lit1.subst(θ);

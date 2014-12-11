@@ -2,7 +2,7 @@ package proofpeer.metis.testing.tptp.Problems.TOP
 
 import proofpeer.metis.testing.tptp._
 
-object TOP005_MINUS2{
+object TOP005_MINUS2 {
   val mainClauses =
     List(
       // Name: union_of_members_1
@@ -41,8 +41,7 @@ object TOP005_MINUS2{
       // Name: lemma_1e_3
       // Role: negated_conjecture
       List("~element_of_collection(union_of_members(g), top_of_basis(f))"))
-  
+
   def clauses =
-     ++
-      this.mainClauses
+    this.mainClauses
 }

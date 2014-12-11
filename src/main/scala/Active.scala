@@ -17,13 +17,14 @@ case class ActiveFactory[
   import ClauseInstances._
 
   val rewriting = new Rewriting[V,F,P,ithmFactory.kernel.type](ithmFactory.kernel)
+  val subsumer  = new Subsumer[V,F,P,Clause[V,F,P]]
 
-  private case class Equation(
+  private[ActiveFactory] case class Equation(
     literal:     Literal[V,F,P],
     orientation: rewriting.Direction,
     redex:       Term[V,F])
 
-  private class Subterm(
+  private[ActiveFactory] class Subterm(
     literal:     Literal[V,F,P],
     path:        Term.Path,
     subterm:     Term[V,F])
@@ -39,8 +40,9 @@ case class ActiveFactory[
   // literal where the subterm occurs at the given path.
   // allSubterms: map from a subterm to a theorem containing that subterm somewhere.
   // Used to check if an equation can be used for some rewriting.
-  class Active private (
+  case class Active private (
     rewriter:    rewriting.Rewrite,
+    subsume:     subsumer.Subsume,
     clauses:     Map[Int,List[ithmFactory.IThm]],
     units:       Nets.LiteralNet[F,P,ithmFactory.kernel.UnitThm],
     literals:    Nets.LiteralNet[F,P,(Literal[V,F,P],ithmFactory.IThm)],
@@ -51,6 +53,7 @@ case class ActiveFactory[
     def this() {
       this(
         new rewriting.Rewrite(),
+        new subsumer.Subsume(),
         Map(),
         new Nets.LiteralNet,
         new Nets.LiteralNet,
@@ -66,11 +69,14 @@ case class ActiveFactory[
     private def resolveUnits(ithm: ithmFactory.IThm) = {
       def resolve1(thm: ithmFactory.IThm, lit: Literal[V,F,P]): ithmFactory.IThm = {
         for (
-          unitThm@ithmFactory.kernel.UnitThm(matchedPat,_) <- units.matches(lit);
+          unitThm@ithmFactory.kernel.UnitThm(matchedPat,_)
+            <- units.matches(lit.negate);
           θ <- matchedPat.patMatch(Subst.empty,lit).headOption;
           resolvent <- ithmFactory.resolveUnit(
             thm,
-            ithmFactory.kernel.substUnit(θ,unitThm)))
+            ithmFactory.kernel.substUnit(θ,unitThm));
+          if { System.out.println("resolved a unit!"); true }
+        )
           return resolvent
         return thm
       }
@@ -92,20 +98,29 @@ case class ActiveFactory[
       for (
         ithm <- ithmFactory.simplify(ithm);
         // TODO: Rewrite
-        ithm2 = resolveUnits(ithm)
-        // TODO: Subsumption
+        ithm2 = resolveUnits(ithm);
+        if !subsume.isStrictlySubsumed(ithm2.clause)
       )
-      yield ithm
+      yield ithm2
     }
 
     def addClause(ithm: ithmFactory.IThm) = {
       // TODO: Deal with equations
       val newLiterals =
         ithm.clause.largestLiterals(litOrder).foldLeft(this.literals) {
-          (net,lit) => net.insert(lit,(lit,ithm))
+          (net,lit) => {
+            System.out.println("Adding")
+            System.out.println(printClause(ithm.clause.lits))
+            lit match {
+              case lit_ :Literal[String,String,String] =>
+                System.out.println("at " + TermPrinter.printLiteral(lit_))
+            }
+            net.insert(lit,(lit,ithm))
+          }
         }
       new Active(
         rewriter,
+        subsume.insert(ithm.clause,ithm.clause),
         clauses,
         units,
         newLiterals,
@@ -117,31 +132,47 @@ case class ActiveFactory[
     def factor(thms: List[ithmFactory.IThm]): (Active,List[ithmFactory.IThm]) = {
       val sortedThms = sortUtilityWise(thms)
 
-      val (active,newThms) = sortedThms.foldLeft(this,List[ithmFactory.IThm]()) {
+      val (active,_,newThms) =
+        sortedThms.foldLeft(this,this.subsume,List[ithmFactory.IThm]()) {
         // Presimplify
-        case ((active,newThms),thm) => active.simplify(thm) match {
-          case None      => (active,newThms)
-          case Some(thm) =>
+        case ((active,subsume,newThms),thm) =>
+//          System.out.println("Presimplify:")
+//          printClause(thm.clause.lits)
+          active.simplify(thm) match {
+          case None      => //System.out.println("Discard.");
+              (active,subsume,newThms)
+            case Some(thm) =>
             sortUtilityWise(
               thm::ithmFactory.factor(thm))
-              .foldLeft(active,List[ithmFactory.IThm]()) {
+              .foldLeft(active,subsume,newThms) {
+
               // Postsimplify
-              case ((active,newThms),thm) => active.simplify(thm) match {
-                case None => (active,newThms)
-                case Some(simpedThm@ithmFactory.IThm(
-                  id,
-                  ithmFactory.kernel.UnitThm(unit))) =>
+              case ((active,subsume,newThms_),thm) => active.simplify(thm) match {
+                case None =>
+                  (active,subsume,newThms_)
+                case Some(simpedThm) =>
+                  // TODO: Update the rewriter
+                  val newUnits = simpedThm match {
+                    case ithmFactory.IThm(_,ithmFactory.kernel.UnitThm(unit)) =>
+                      System.out.println("Inserting unit: ")
+                      printClause(simpedThm.clause)
+                      units.insert(unit.lit,unit)
+                    case _ => units
+                  }
                   val active2 = new Active(
-                    rewriter,
-                    clauses,
-                    units.insert(unit.lit,unit),
-                    literals,
-                    equations,
-                    subterms,
-                    allSubterms)
-                  // TODO: Update subsumer
-                  (active2, simpedThm::newThms)
-                case Some(simpedThm) => (active,simpedThm::newThms)
+                    active.rewriter,
+                    active.subsume,
+                    active.clauses,
+                    newUnits,
+                    active.literals,
+                    active.equations,
+                    active.subterms,
+                    active.allSubterms)
+                  (
+                    active2,
+                    subsume.insert(simpedThm.clause,simpedThm.clause),
+                    simpedThm::newThms_
+                  )
               }
             }
         }
@@ -150,26 +181,25 @@ case class ActiveFactory[
       // TODO: Extract rewritable (and probably make tail-recursive)
     }
 
-    def deduceResolution1(lit:Literal[V,F,P], ithm: ithmFactory.IThm) = {
+    def deduceResolutions(ithm: ithmFactory.IThm) = {
+      printClause(ithm.clause.lits)
+      literals.unifies(ithm.clause.lits.head.negate).foreach {
+        case (_,ithm2) => printClause(ithm2.clause.lits)
+      }
       for (
+        lit          <- ithm.clause.largestLiterals(litOrder);
         (lit2,ithm2) <- literals.unifies(lit.negate);
         resolvent    <- ithmFactory.resolve(lit, ithm, lit2, ithm2))
       yield resolvent
     }
 
-    def deduceResolutions(ithm: ithmFactory.IThm) = {
-      ithm.clause.largestLiterals(litOrder).flatMap {
-        deduceResolution1(_, ithm)
-      }
-    }
-
     def add(ithm: ithmFactory.IThm):
         (Active,List[ithmFactory.IThm]) = {
-
       val simpedThm = simplify(ithm) match {
         case None                             =>
-          return (this,List(ithm))
+          return (this,List())
         case Some(ithm) if ithm.isContradiction =>
+          System.out.println("DONE AND DONE!")
           return (this,List(ithm))
         case Some(ithm) => ithm
       }
@@ -181,6 +211,15 @@ case class ActiveFactory[
         active.factor(derived.toList)
       }
       else factor(List(simpedThm))
+    }
+    // Debug
+    def getLiterals = this.literals
+
+    def printClause(lits:Set[Literal[V,F,P]]) = {
+      lits.foreach { case lit:Literal[String,String,String] =>
+        System.out.println(TermPrinter.printLiteral(lit))
+      }
+      System.out.println("")
     }
   }
 }

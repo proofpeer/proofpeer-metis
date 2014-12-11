@@ -2,7 +2,7 @@ package proofpeer.metis.testing.tptp.Problems.TOP
 
 import proofpeer.metis.testing.tptp._
 
-object TOP012_MINUS1{
+object TOP012_MINUS1 {
   val mainClauses =
     List(
       // Name: problem_7_129
@@ -35,7 +35,7 @@ object TOP012_MINUS1{
       // Name: problem_7_138
       // Role: negated_conjecture
       List("~closed(cx, cx, ct)","~closed(empty_set, cx, ct)","~closed(intersection_of_members(f), cx, ct)","~closed(union_of_sets(cy1, cy2), cx, ct)"))
-  
+
   def clauses =
     Axioms.TOP001_MINUS0.mainClauses ++
       this.mainClauses
