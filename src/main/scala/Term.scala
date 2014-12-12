@@ -96,10 +96,10 @@ abstract sealed class Term[V,F](implicit ordV: Order[V])
   }
 
   // Optimise: make tail-recursive
-  override def size: Int = {
+  override def heuristicSize: Int = {
     this match {
       case Var(x)      => 1
-      case Fun(f,args) => 1 + args.map(_.size).sum
+      case Fun(f,args) => 1 + args.map(_.heuristicSize).sum
     }
   }
 

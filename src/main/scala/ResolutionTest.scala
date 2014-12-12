@@ -72,8 +72,8 @@ object ResolutionTest {
 
   def main(args: Array[String]) {
 //    System.out.println(resolves.length)
-    0 to 23 foreach { n => System.out.println(n); showStep(n) }
-    showStep(24)
+    0 to 28 foreach { n => System.out.println(n); showStep(n) }
+    showStep(29)
     System.out.println("END")
   }
 }

@@ -50,7 +50,7 @@ trait GenTerm[V,T,GT] { this: GT =>
   def freeIn(v: V): Boolean
   def subst(θ: Subst[V,T]): GT
 
-  def size: Int
+  def heuristicSize: Int
 
   /** Treat this term as a pattern and match it against term. */
   def patMatch(θ: Subst[V,T], term: GT): List[Subst[V,T]]

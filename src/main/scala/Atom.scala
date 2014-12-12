@@ -65,9 +65,9 @@ abstract sealed class Atom[V,F,P](implicit ordV : Order[V])
       case _ => List()
     }
 
-  override def size = 1 + (this match {
-    case Pred(_,args) => args.map(_.size).sum
-    case Eql(x,y)     => x.size + y.size
+  override def heuristicSize = 1 + (this match {
+    case Pred(_,args) => args.map(_.heuristicSize).sum
+    case Eql(x,y)     => x.heuristicSize + y.heuristicSize
   })
 
   def isRefl = this match {

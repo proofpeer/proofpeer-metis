@@ -65,7 +65,7 @@ class Subsumer[V,F,P,A](implicit ordV: Order[V]) {
     }
 
     private def sortLits(lits: List[Literal[V,F,P]]) = {
-      lits.toSeq.sortBy(_.size)(scala.math.Ordering.Int.reverse)
+      lits.toSeq.sortBy(_.heuristicSize)(scala.math.Ordering.Int.reverse)
     }
 
     private def withSyms(lits: Set[Literal[V,F,P]]) = {
@@ -110,7 +110,7 @@ class Subsumer[V,F,P,A](implicit ordV: Order[V]) {
           this.nonunits)
         case fstLit::sndLit::rstLits =>
           val id   = this.nonunits.nextId
-          val size = cl.size
+          val size = cl.lits.size
           val fstLits = this.nonunits.fstLits.insert(fstLit,(id,size))
           val pred = incompatible(fstLit)
 

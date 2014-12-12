@@ -90,7 +90,7 @@ case class ActiveFactory[
         case (thm1,thm2) =>
           thm1.isContradiction || !thm2.isContradiction ||
           thm1.isUnitEql || !thm2.isUnitEql ||
-          (thm1.clause.size < thm2.clause.size)
+          (thm1.clause.lits.size < thm2.clause.lits.size)
       }
     }
 
@@ -109,12 +109,12 @@ case class ActiveFactory[
       val newLiterals =
         ithm.clause.largestLiterals(litOrder).foldLeft(this.literals) {
           (net,lit) => {
-            System.out.println("Adding")
-            System.out.println(printClause(ithm.clause.lits))
-            lit match {
-              case lit_ :Literal[String,String,String] =>
-                System.out.println("at " + TermPrinter.printLiteral(lit_))
-            }
+            // System.out.println("Adding")
+            // System.out.println(printClause(ithm.clause.lits))
+            // lit match {
+            //   case lit_ :Literal[String,String,String] =>
+            //     System.out.println("at " + TermPrinter.printLiteral(lit_))
+            // }
             net.insert(lit,(lit,ithm))
           }
         }
@@ -154,8 +154,8 @@ case class ActiveFactory[
                   // TODO: Update the rewriter
                   val newUnits = simpedThm match {
                     case ithmFactory.IThm(_,ithmFactory.kernel.UnitThm(unit)) =>
-                      System.out.println("Inserting unit: ")
-                      printClause(simpedThm.clause)
+//                      System.out.println("Inserting unit: ")
+//                      printClause(simpedThm.clause)
                       units.insert(unit.lit,unit)
                     case _ => units
                   }
@@ -182,9 +182,9 @@ case class ActiveFactory[
     }
 
     def deduceResolutions(ithm: ithmFactory.IThm) = {
-      printClause(ithm.clause.lits)
+//      printClause(ithm.clause.lits)
       literals.unifies(ithm.clause.lits.head.negate).foreach {
-        case (_,ithm2) => printClause(ithm2.clause.lits)
+        case (_,ithm2) => //printClause(ithm2.clause.lits)
       }
       for (
         lit          <- ithm.clause.largestLiterals(litOrder);

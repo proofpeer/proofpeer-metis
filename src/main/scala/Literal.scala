@@ -28,7 +28,7 @@ case class Literal[V,F,P](isPositive: Boolean, atom: Atom[V,F,P])(
     if (isPositive == lit.isPositive)
       atom.unify(θ,lit.atom)
     else List()
-  override def size = atom.size
+  override def heuristicSize = atom.heuristicSize
 
   def isRefl = isPositive && atom.isRefl
 }

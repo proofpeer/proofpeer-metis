@@ -46,7 +46,7 @@ case class Clause[V,F,P](lits: Set[Literal[V,F,P]])(implicit
       θ    <- unifyMatchOrdered(θ, Seq() ++ perm))
     yield θ).toList
   }
-  override def size = lits.map(_.size).sum
+  override def heuristicSize = lits.map(_.heuristicSize).sum
 
   def isTautology: Boolean = {
     lits.foldLeft(new TreeSet[Atom[V,F,P]]()) {

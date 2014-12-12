@@ -30,16 +30,16 @@ case class WaitingFactory[V,F,P,S,
       val freesWeight = cl.frees.size + 1
       val priority    = priorityFactor * ithm.id
 
-      distance * cl.size * freesWeight * litWeight + priority
+      distance * cl.heuristicSize * freesWeight * litWeight + priority
     }
 
     def add(distance: Double, ithms: List[ithmFactory.IThm]) = {
+      val distance_ = distance + Math.log(ithms.length)
       val newIthms =
         ithms.foldLeft(this.ithms) {
-          (ithms,ithm) =>
-          val distance_ = distance + Math.log(ithm.clause.lits.size)
+          (ithms_,ithm) =>
           val weight    = clauseWeight(distance_, ithm)
-          ithms + ( weight → (distance,ithm) )
+          ithms_ + ( weight → (distance,ithm) )
         }
       new Waiting(newIthms)
     }
