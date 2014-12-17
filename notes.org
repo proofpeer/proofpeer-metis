@@ -197,3 +197,60 @@
      Code is complicated by the possibility of asking for "non-strictness". Strictness means that we don't bother asking whether cl' subsumes cl when cl' has more lits than cl. This is not equivalent, as a factor of cl' might still subsume cl, however, so long as factors are always added to the subsumption set, we are good.
    
 
+* [[file:~/metis/src/Model.sml][Finite Models]]
+** [[file:~/metis/src/Model.sml::type%20element%20%3D%20int%3B][element (type)]]
+   - An element of the domain. Used as finite sets of naturals.
+   - [[file:~/metis/src/Model.sml::fun%20elementListSpace%20{size%20%3D%20N}%20arity%20%3D][elementListSpace]]
+     + Returns the number of arity-tuples from elements in the domain, provided this
+       value is less than 1000.
+   - [[file:~/metis/src/Model.sml::fun%20elementListIndex%20{size%20%3D%20N}%20%3D][elementListIndex]]
+     + Returns an index for the given tuple. Effectively interprets
+       [a0,a1,a2,...,an]
+       as a number in base-N and returns the corresponding integer, where N is the size of the element set.
+** [[file:~/metis/src/Model.sml::datatype%20valuation%20%3D%20Valuation%20of%20element%20NameMap.map%3B][valuation (type)]]
+   - A mapping from variable names to elements
+   - [[file:~/metis/src/Model.sml::fun%20incrementValuation%20N%20vars%20%3D][incrementValuation]]
+     + Convert the valuation to a list and perform an increment as if it represents an n-ary value. Used to exhaustively count through all valuations.
+** Perturbation
+*** A perturbation of a model given an evaluation (of the variables) and a clause changes the value of a relation or a function at a vector of arguments such that the clause becomes true. The waiting set is, by default, initialised with a model that perturbs the full clause set in the problem one after the other, a total of 100 times, each time using a random valuation. Clauses in the waiting set are preferred if their literals mostly evaluate as false.
+
+*** [[file:~/metis/src/Model.sml::fun%20modelTerm%20M%20V%20%3D][modelTerm]]
+   :PROPERTIES:
+   :ID:       71783623-b001-4a2b-a668-c45017ce7d40
+   :END:
+  | field | description   |
+  |-------+---------------|
+  | M     | The model     |
+  | V     | The valuation |
+
+  Constructs a term containing evaluations of all subterms.
+**** Referenced by
+    [[id:36a393f1-ca7b-41e1-9250-5d6a091d3f87][pertAtom]]
+
+*** [[file:~/metis/src/Model.sml::fun%20pertAtom%20M%20V%20target%20(rel,tms)%20acc%20%3D][pertAtom]]
+   :PROPERTIES:
+   :ID:       36a393f1-ca7b-41e1-9250-5d6a091d3f87
+   :END:
+   | field  | description                            |
+   |--------+----------------------------------------|
+   | M      | Model                                  |
+   | V      | Valuation                              |
+   | target | The polarity of the associated literal |
+   | rel    | The relation name                      |
+   | tms    | The arguments                          |
+   | acc    | Accumulation of perturbations          |
+   
+   Uses [[id:71783623-b001-4a2b-a668-c45017ce7d40][modelTerm]] across all relation arguments, obtaining their evaluations, and adding a RelationPertubation to the accumulator. Then perturbs all model terms.
+
+
+ [a0,a1,a2,...,an] is a number in base-N, where N is the size of the element set.
+
+Model.size
+Model.randomValuation
+Model.interpretClause
+Model.perturbClause
+Model.new
+Model.check
+
+
+  
