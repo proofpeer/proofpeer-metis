@@ -1,5 +1,6 @@
 package proofpeer.metis
 
+import scala.language.higherKinds
 import scalaz._
 import Scalaz._
 
@@ -9,7 +10,7 @@ case class FinOrd(size: Int) {
     throw new IllegalArgumentException("size must be greater than 0.")
   }
 
-  case class Fin private[FinOrd](n: Int) {
+  case class Fin(n: Int) {
     /** Returns the successor, if there is one. */
     def suc = {
       val s = this.n + 1
@@ -37,4 +38,21 @@ case class FinOrd(size: Int) {
       }
     }
   }
+
+  def filter(p: Fin => Boolean) = {
+    for (
+      i <- 0 to (size-1);
+      val f = Fin(i)
+      if p(f))
+    yield f
+  }
+
+  def filterM[M[_]: Monad](p: Fin => M[Boolean]) = {
+     (0 to (size-1)).toList.map(Fin(_)).filterM(p)
+  }
+
+  implicit val ordFin: Order[Fin] =
+    new Order[Fin]{
+      def order (f1:Fin, f2:Fin): Ordering = f1.n.cmp(f2.n)
+    }
 }

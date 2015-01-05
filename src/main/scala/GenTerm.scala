@@ -8,8 +8,7 @@ import Scalaz._
   * @tparam V alphabet from which variables are drawn
   * @tparam T type of terms substituted for
   */
-case class Subst[V,T] private(θ: V ==>> T)(implicit ordV: Order[V])
-    extends PartialFunction[V,T] {
+case class Subst[V:Order,T] private(θ: V ==>> T) extends PartialFunction[V,T] {
   override def isDefinedAt(v: V) = θ.member(v)
   override def apply(v: V): T = this.lookup(v).get
 
@@ -37,10 +36,7 @@ case class Subst[V,T] private(θ: V ==>> T)(implicit ordV: Order[V])
 }
 
 object Subst {
-  def empty[V,T](implicit ordV: Order[V]) = {
-    implicit val _ = ordV.toScalaOrdering
-    Subst(==>>.empty[V,T])
-  }
+  def empty[V:Order,T] = Subst(==>>.empty[V,T])
 }
 
 /** General terms, abstracting over first-order terms and formulas.

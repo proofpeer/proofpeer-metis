@@ -6,7 +6,7 @@ import scala.collection.SeqView
 import scalaz._
 import Scalaz._
 
-class Subsumer[V,F,P,A](implicit ordV: Order[V]) {
+class Subsumer[V:Order,F,P,A] {
   type Id   = Int
   type Size = Int
   private case class NonUnit (

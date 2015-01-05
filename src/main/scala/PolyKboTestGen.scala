@@ -52,9 +52,7 @@ object KboTestCodeGen {
     val resultsTokens = new parser.lexical.Scanner(resultsSource)
     val testCases     = parser.rep(parser.parseTermPair)(testTokens).get
     val testResults   = parser.rep(parser.parseResult)(resultsTokens).get
-    class ordFun[V,F](implicit
-      ordV:Order[V],
-      ordF:Order[F]) extends Order[Fun[V,F]] {
+    class ordFun[V:Order,F:Order] extends Order[Fun[V,F]] {
       def order(fun1: Fun[V,F],fun2: Fun[V,F]) =
         (fun1.args.length,fun1.f) ?|? (fun2.args.length,fun2.f)
     }

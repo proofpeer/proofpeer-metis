@@ -12,8 +12,7 @@ import TermInstances._
   * @tparam F The alphabet from which functor names are drawn
   * @tparam P The alphabet from which predicate names are drawn
   */
-abstract sealed class Atom[V,F,P](implicit ordV : Order[V])
-    extends GenTerm[V,Term[V,F],Atom[V,F,P]] {
+abstract sealed class Atom[V:Order,F,P] extends GenTerm[V,Term[V,F],Atom[V,F,P]] {
 
   override def frees = this match {
     case Pred(_,args) => args.foldLeft(Set[V]()){
@@ -76,10 +75,9 @@ abstract sealed class Atom[V,F,P](implicit ordV : Order[V])
   }
 }
 
-case class Pred[V,F,P](functor: P, args: List[Term[V,F]])(
-  implicit ordV: Order[V]) extends Atom[V,F,P]
-case class Eql[V,F,P](l: Term[V,F], r: Term[V,F])(
-  implicit ordV: Order[V]) extends Atom[V,F,P] {
+case class Pred[V:Order,F,P](functor: P, args: List[Term[V,F]])
+  extends Atom[V,F,P]
+case class Eql[V:Order,F,P](l: Term[V,F], r: Term[V,F]) extends Atom[V,F,P] {
 }
 
 object AtomInstances {

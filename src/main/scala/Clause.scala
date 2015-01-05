@@ -11,15 +11,11 @@ import RichCollectionInstances._
 
 /** Clauses, implicitly a set of literals, of which the clause is their
     disjunction. Two clauses are equal when their set of literals is equal. */
-case class Clause[V,F,P](lits: Set[Literal[V,F,P]])(implicit
-  ordV: Order[V],
-  ordF: Order[F],
-  ordP: Order[P]) extends GenTerm[V,Term[V,F],Clause[V,F,P]] {
+case class Clause[V:Order,F:Order,P:Order](lits: Set[Literal[V,F,P]])
+    extends GenTerm[V,Term[V,F],Clause[V,F,P]] {
 
   import LiteralInstances._
   import AtomInstances._
-  implicit val OrdAtom    = AtomOrder(ordV,ordF,ordP).toScalaOrdering
-  implicit val OrdLiteral = LiteralOrder(ordV,ordF,ordP).toScalaOrdering
 
   override def frees = lits.flatMap(_.frees)
   override def freeIn(v: V) = lits.exists(_.freeIn(v))
@@ -47,6 +43,8 @@ case class Clause[V,F,P](lits: Set[Literal[V,F,P]])(implicit
     yield θ).toList
   }
   override def heuristicSize = lits.map(_.heuristicSize).sum
+
+  implicit val atomOrder = Order[Atom[V,F,P]].toScalaOrdering
 
   def isTautology: Boolean = {
     lits.foldLeft(new TreeSet[Atom[V,F,P]]()) {

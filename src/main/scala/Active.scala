@@ -2,17 +2,14 @@ package proofpeer.metis
 
 import scala.collection.immutable._
 import scalaz._
+import Scalaz._
 
 case class ActiveFactory[
-  V,F,P,S,
+  V:Order,F:Order,P:Order,S,
   K <: Kernel[V,F,P],
   ITF <: IThmFactory[V,F,P,S,K]](
   ithmFactory: ITF,
-  litOrder: LiteralOrdering[V,F,P])(implicit
-  ordInt: Order[Int],
-  ordV: Order[V],
-  ordF: Order[F],
-  ordFun: Order[Fun[V,F]]) {
+  litOrder: LiteralOrdering[V,F,P])(implicit ordFun: Order[Fun[V,F]]) {
 
   import ClauseInstances._
 
@@ -136,11 +133,8 @@ case class ActiveFactory[
         sortedThms.foldLeft(this,this.subsume,List[ithmFactory.IThm]()) {
         // Presimplify
         case ((active,subsume,newThms),thm) =>
-//          System.out.println("Presimplify:")
-//          printClause(thm.clause.lits)
           active.simplify(thm) match {
-          case None      => //System.out.println("Discard.");
-              (active,subsume,newThms)
+          case None      => (active,subsume,newThms)
             case Some(thm) =>
             sortUtilityWise(
               thm::ithmFactory.factor(thm))
@@ -154,8 +148,6 @@ case class ActiveFactory[
                   // TODO: Update the rewriter
                   val newUnits = simpedThm match {
                     case ithmFactory.IThm(_,ithmFactory.kernel.UnitThm(unit)) =>
-//                      System.out.println("Inserting unit: ")
-//                      printClause(simpedThm.clause)
                       units.insert(unit.lit,unit)
                     case _ => units
                   }
@@ -182,10 +174,6 @@ case class ActiveFactory[
     }
 
     def deduceResolutions(ithm: ithmFactory.IThm) = {
-//      printClause(ithm.clause.lits)
-      literals.unifies(ithm.clause.lits.head.negate).foreach {
-        case (_,ithm2) => //printClause(ithm2.clause.lits)
-      }
       for (
         lit          <- ithm.clause.largestLiterals(litOrder);
         (lit2,ithm2) <- literals.unifies(lit.negate);
@@ -214,12 +202,5 @@ case class ActiveFactory[
     }
     // Debug
     def getLiterals = this.literals
-
-    def printClause(lits:Set[Literal[V,F,P]]) = {
-      lits.foreach { case lit:Literal[String,String,String] =>
-        System.out.println(TermPrinter.printLiteral(lit))
-      }
-      System.out.println("")
-    }
   }
 }

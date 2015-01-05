@@ -11,10 +11,7 @@ import Scalaz._
   * @tparam F The alphabet from which functor names are drawn
   * @tparam P The alphabet from which predicate names are drawn
 */
-sealed class Kernel[V,F,P](implicit
-  ordV: Order[V],
-  ordF: Order[F],
-  ordP: Order[P]) {
+sealed class Kernel[V:Order,F:Order,P:Order] {
 
   sealed abstract class Inference
   case class Axiom() extends Inference
@@ -124,7 +121,7 @@ sealed class Kernel[V,F,P](implicit
     conv: Term[V,F] => Option[(Term[V,F], Thm)]):
       Option[(Term[V,F], Set[Literal[V,F,P]], Set[Thm])] = {
     val (newTm, topClause, topDeps, topSuccess) =
-      util.Fun.repeat ({
+      util.Fun.unfold((tm,Set[Literal[V,F,P]](),Set[Thm](),false)) {
         acc:(Term[V,F],Set[Literal[V,F,P]],Set[Thm],Boolean) =>
         val (tm,clause,deps,_) = acc
         conv(tm).map {
@@ -134,7 +131,7 @@ sealed class Kernel[V,F,P](implicit
               (newTm, clause | thm.clause - eql, deps + thm,true)
             else throw new Error("Invalid conversion")
         }
-      }, (tm,Set[Literal[V,F,P]](),Set[Thm](),false))
+      }
     val (newTm2, clause, deps, anySuccess) =
       newTm match {
         case Var(_) => (newTm, topClause, topDeps, false)

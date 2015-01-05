@@ -19,7 +19,7 @@ object MetisRNG {
 
   private def nextWord = {
     for (
-      seed <- init[Long];
+      seed <- get[Long];
       next = step(seed);
       _    <- put[Long](next))
     yield next
@@ -35,5 +35,9 @@ object MetisRNG {
 
   def nextBoolean = {
     nextWord.map(n => (n & topBit) == 0)
+  }
+
+  def pickElement[A](xs: List[A]) = {
+    MetisRNG.nextInt(xs.length) map (xs(_))
   }
 }

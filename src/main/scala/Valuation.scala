@@ -5,7 +5,7 @@ import scalaz._
 import Scalaz._
 
 /** Random or enumerable valuations A → fin. */
-case class Valuations[A](fin: FinOrd)(implicit ord: Order[A]) {
+case class Valuations[A](fin: FinOrd) {
   case class Valuation private[Valuations] (m: Map[A,fin.Fin]) {
     /** A success function, which allows enumeration of all valuations from zero. */
     def suc: Option[Valuation] = {
@@ -32,8 +32,8 @@ case class Valuations[A](fin: FinOrd)(implicit ord: Order[A]) {
 
   /** The random valuation */
   def random(xs: Set[A]) = {
-    val rv = xs.foldLeftM[MetisRNG.M,Map[A,fin.Fin]](Map[A,fin.Fin]()) {
-      case (m,x) => for (n <- fin.random) yield m + (x → n)
+    val rv = xs.foldRightM[MetisRNG.M,Map[A,fin.Fin]](Map[A,fin.Fin]()) {
+      case (x,m) => for (n <- fin.random) yield m + (x → n)
     }
     rv.map(Valuation(_))
   }

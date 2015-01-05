@@ -10,8 +10,7 @@ import Scalaz._
   * @tparam V The alphabet from which variable names are drawn
   * @tparam F The alphabet from which functor names are drawn
   */
-abstract sealed class Term[V,F](implicit ordV: Order[V])
-    extends GenTerm[V,Term[V,F],Term[V,F]] {
+abstract sealed class Term[V:Order,F] extends GenTerm[V,Term[V,F],Term[V,F]] {
   override def freeIn(v: V): Boolean = {
     this match {
       case Var(v_) => v == v_
@@ -124,18 +123,15 @@ abstract sealed class Term[V,F](implicit ordV: Order[V])
   }
 }
 
-case class Var[V,F](v: V)(implicit ordV: Order[V]) extends Term[V,F]
-case class Fun[V,F](f: F, args: List[Term[V,F]])(implicit ordV: Order[V])
-    extends Term[V,F]
+case class Var[V:Order,F](v: V) extends Term[V,F]
+case class Fun[V:Order,F](f: F, args: List[Term[V,F]]) extends Term[V,F]
 
 object TermInstances {
-  implicit def OrdTerm[V,F](implicit
-    ordV: Order[V],
-    ordF: Order[F]) : Order[Term[V,F]] =
+  implicit def ordTerm[V:Order,F:Order]: Order[Term[V,F]] =
     new Order[Term[V,F]]{
       def order (x:Term[V,F], y:Term[V,F]): Ordering =
         (x,y) match {
-          case (Var(v1),Var(v2))  => ordV(v1,v2)
+          case (Var(v1),Var(v2))  => v1 ?|? v2
           case (Var(_), Fun(_,_)) => Ordering.LT
           case (Fun(_,_), Var(_)) => Ordering.GT
           case (Fun(f1,args1),Fun(f2,args2)) =>
@@ -171,7 +167,7 @@ case class Weight[V] private (nameMap : Map[V,Int], c: Int) {
 object Weight {
   import Scalaz._
 
-  def fromTerm[V,F](
+  def fromTerm[V:Order,F](
     tm: Term[V,F],
     funWeight: (F,Int) => Int)(implicit
     ordV: Order[V]) = {
@@ -200,8 +196,8 @@ object Weight {
   * @param funWeight An arbitrary weighting of functor names. Defaults to a constant
   * function in METIS.
   */
-class KnuthBendix[V,F](funWeight: (F,Int) => Int)(implicit
-  ordInt: Order[Int], ordV: Order[V], ordF: Order[F], ordFun: Order[Fun[V,F]]) {
+class KnuthBendix[V:Order,F:Order](funWeight: (F,Int) => Int)(
+  implicit ordFun: Order[Fun[V,F]]) {
 
   /** Add weight to a term, so that it can be compared. */
   private case class WTerm(tm:Term[V,F]) {

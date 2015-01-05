@@ -7,7 +7,7 @@ import scalaz._
 import Scalaz._
 
 /** Calculation of clause factor substitutions. */
-class Factor[V,F,P](implicit ordV: Order[V]) {
+class Factor[V:Order,F,P] {
   private abstract sealed class Edge
   private case class FactorEdge(atm1: Atom[V,F,P], atm2: Atom[V,F,P]) extends Edge
   private case class ReflEdge(tm1: Term[V,F], tm2: Term[V,F]) extends Edge
@@ -19,8 +19,7 @@ class Factor[V,F,P](implicit ordV: Order[V]) {
 
   private case class SubEdge(θ: Subst[V,Term[V,F]], edge: Edge)
 
-  private def joinEdge(θ: Subst[V,Term[V,F]], edge: Edge)(
-    implicit ordV: Order[V]) = {
+  private def joinEdge(θ: Subst[V,Term[V,F]], edge: Edge) = {
     (edge match {
       case FactorEdge(atm1, atm2) => atm1.unify(θ,atm2)
       case ReflEdge(tm1, tm2)     => tm1.unify(θ,tm2)
@@ -97,7 +96,7 @@ class Factor[V,F,P](implicit ordV: Order[V]) {
     }.flatten
     val litSubEdges = combineSym(allLits) {
       case (Literal(pol,atm1),Literal(pol2,atm2)) if pol == pol2 =>
-        atm1.unify(Subst.empty,atm2).map {
+        atm1.unify(Subst.empty[V,Term[V,F]],atm2).map {
           case θ => SubEdge(θ,FactorEdge(atm1,atm2))
         }
       case _ => List()

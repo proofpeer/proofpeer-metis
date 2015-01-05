@@ -12,8 +12,7 @@ import Scalaz._
   * @tparam F The alphabet from which functor names are drawn
   * @tparam P The alphabet from which predicate names are drawn
   */
-case class Literal[V,F,P](isPositive: Boolean, atom: Atom[V,F,P])(
-  implicit ordV : Order[V])
+case class Literal[V:Order,F,P](isPositive: Boolean, atom: Atom[V,F,P])
     extends GenTerm[V,Term[V,F],Literal[V,F,P]] {
   def negate() = Literal(!this.isPositive, this.atom)
 
@@ -33,8 +32,7 @@ case class Literal[V,F,P](isPositive: Boolean, atom: Atom[V,F,P])(
   def isRefl = isPositive && atom.isRefl
 }
 
-class LiteralOrdering[V,F,P](kbo: KnuthBendix[V,F], predicateFunctor: P=>F)(implicit
-  ordV: Order[V]) {
+class LiteralOrdering[V:Order,F,P](kbo: KnuthBendix[V,F], predicateFunctor: P=>F) {
   def atomToTerms(atm: Atom[V,F,P]) =
     atm match {
       case Pred(p,args) => List(Fun(predicateFunctor(p),args))
@@ -73,10 +71,7 @@ class LiteralOrdering[V,F,P](kbo: KnuthBendix[V,F], predicateFunctor: P=>F)(impl
 
 object LiteralInstances {
   import AtomInstances._
-  implicit def LiteralOrder[V,F,P](implicit
-    ordV: Order[V],
-    ordF: Order[F],
-    ordP: Order[P]) = new Order[Literal[V,F,P]] {
+  implicit def LiteralOrder[V:Order,F:Order,P:Order] = new Order[Literal[V,F,P]] {
     def order(lit1: Literal[V,F,P], lit2: Literal[V,F,P]) =
       (lit1.isPositive, lit1.atom) ?|? (lit2.isPositive, lit2.atom)
   }

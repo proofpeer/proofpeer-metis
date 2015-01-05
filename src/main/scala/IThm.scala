@@ -17,15 +17,12 @@ import Scalaz._
   * @param litOrder  an implementation of literal ordering
   * @param factoring an implementation of factoring
   */
-case class IThmFactory[V,F,P,S,K <: Kernel[V,F,P]](
+case class IThmFactory[V:Order,F:Order,P:Order,S,K <: Kernel[V,F,P]](
   kernel: Kernel[V,F,P],
   initState: S,
   nextV : S => (S,V),
   litOrder: LiteralOrdering[V,F,P],
-  factoring: Factor[V,F,P])(implicit
-    ordV: Order[V],
-    ordF: Order[F],
-    ordP: Order[P]) {
+  factoring: Factor[V,F,P]) {
 
   case class IThm private[IThmFactory] (theId: Int, thm: kernel.Thm) {
     val clause = thm.clause
@@ -70,7 +67,7 @@ case class IThmFactory[V,F,P,S,K <: Kernel[V,F,P]](
     val thm2  = ithm2.thm
     val lit2_ = lit2.negate
     for (
-      θ <- lit1.unify(Subst.empty,lit2_).headOption;
+      θ <- lit1.unify(Subst.empty[V,Term[V,F]],lit2_).headOption;
       lit1_ = lit1.subst(θ);
       thm1_ = kernel.subst(θ,thm1);
       thm2_ = kernel.subst(θ,thm2);

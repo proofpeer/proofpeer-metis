@@ -2,17 +2,13 @@ package proofpeer.metis
 
 import scala.collection.immutable._
 import scalaz._
+import Scalaz._
 
 /** A rewriting system. */
-case class Rewriting[V,F,P,K <: Kernel[V,F,P]](kernel: K)(implicit
-  ordV: Order[V],
-  ordF: Order[F],
-  ordFun: Order[Fun[V,F]],
-  ordInt: Order[Int]) {
+case class Rewriting[V:Order,F:Order,P,K <: Kernel[V,F,P]](kernel: K)(
+  implicit ordFun: Order[Fun[V,F]]) {
 
   import ClauseInstances._
-
-  implicit val orderingInt = ordInt.toScalaOrdering
 
   val kbo = KnuthBendix.kbo[V,F]
 
