@@ -37,7 +37,7 @@ case class ActiveFactory[
   // literal where the subterm occurs at the given path.
   // allSubterms: map from a subterm to a theorem containing that subterm somewhere.
   // Used to check if an equation can be used for some rewriting.
-  case class Active private (
+  case class Active (
     rewriter:    rewriting.Rewrite,
     subsume:     subsumer.Subsume,
     clauses:     Map[Int,List[ithmFactory.IThm]],
@@ -91,7 +91,7 @@ case class ActiveFactory[
       }
     }
 
-    def simplify(ithm: ithmFactory.IThm) = {
+    def simplifyWith(subsume: subsumer.Subsume, ithm: ithmFactory.IThm) = {
       for (
         ithm <- ithmFactory.simplify(ithm);
         // TODO: Rewrite
@@ -100,6 +100,8 @@ case class ActiveFactory[
       )
       yield ithm2
     }
+
+    def simplify(ithm: ithmFactory.IThm) = simplifyWith(this.subsume, ithm)
 
     def addClause(ithm: ithmFactory.IThm) = {
       // TODO: Deal with equations
@@ -126,6 +128,9 @@ case class ActiveFactory[
         allSubterms)
     }
 
+    // TODO: Pretty horrible. The subsumer is only temporarily extended to
+    // filter the factor clauses, and then the original is restored. Units and
+    // rewrites are added permanently.
     def factor(thms: List[ithmFactory.IThm]): (Active,List[ithmFactory.IThm]) = {
       val sortedThms = sortUtilityWise(thms)
 
@@ -133,42 +138,43 @@ case class ActiveFactory[
         sortedThms.foldLeft(this,this.subsume,List[ithmFactory.IThm]()) {
         // Presimplify
         case ((active,subsume,newThms),thm) =>
-          active.simplify(thm) match {
-          case None      => (active,subsume,newThms)
+          active.simplifyWith(subsume,thm) match {
+            case None      => (active,subsume,newThms)
             case Some(thm) =>
-            sortUtilityWise(
-              thm::ithmFactory.factor(thm))
-              .foldLeft(active,subsume,newThms) {
+              sortUtilityWise(
+                thm::ithmFactory.factor(thm))
+                .foldLeft(active,subsume,newThms) {
 
-              // Postsimplify
-              case ((active,subsume,newThms_),thm) => active.simplify(thm) match {
-                case None =>
-                  (active,subsume,newThms_)
-                case Some(simpedThm) =>
-                  // TODO: Update the rewriter
-                  val newUnits = simpedThm match {
-                    case ithmFactory.IThm(_,ithmFactory.kernel.UnitThm(unit)) =>
-                      units.insert(unit.lit,unit)
-                    case _ => units
+                // Postsimplify
+                case ((active,subsume,newThms_),thm) =>
+                  active.simplifyWith(subsume,thm) match {
+                    case None =>
+                      (active,subsume,newThms_)
+                    case Some(simpedThm) =>
+                      // TODO: Update the rewriter
+                      val newUnits = simpedThm match {
+                        case ithmFactory.IThm(_,ithmFactory.kernel.UnitThm(unit)) =>
+                          units.insert(unit.lit,unit)
+                        case _ => units
+                      }
+                      val active2 = new Active(
+                        active.rewriter,
+                        active.subsume,
+                        active.clauses,
+                        newUnits,
+                        active.literals,
+                        active.equations,
+                        active.subterms,
+                        active.allSubterms)
+                      (
+                        active2,
+                        subsume.insert(simpedThm.clause,simpedThm.clause),
+                        simpedThm::newThms_
+                      )
                   }
-                  val active2 = new Active(
-                    active.rewriter,
-                    active.subsume,
-                    active.clauses,
-                    newUnits,
-                    active.literals,
-                    active.equations,
-                    active.subterms,
-                    active.allSubterms)
-                  (
-                    active2,
-                    subsume.insert(simpedThm.clause,simpedThm.clause),
-                    simpedThm::newThms_
-                  )
-              }
             }
+          }
         }
-      }
       (active,newThms)
       // TODO: Extract rewritable (and probably make tail-recursive)
     }
@@ -187,7 +193,6 @@ case class ActiveFactory[
         case None                             =>
           return (this,List())
         case Some(ithm) if ithm.isContradiction =>
-          System.out.println("DONE AND DONE!")
           return (this,List(ithm))
         case Some(ithm) => ithm
       }

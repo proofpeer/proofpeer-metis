@@ -6,6 +6,7 @@ import scala.collection.SeqView
 import scalaz._
 import Scalaz._
 
+// TODO: A is currently unused. Provided in Metis for extra filtering.
 class Subsumer[V:Order,F,P,A] {
   type Id   = Int
   type Size = Int
@@ -56,6 +57,8 @@ class Subsumer[V:Order,F,P,A] {
     search(θ, σss.toList)
   }
 
+  // We don't really need to store the clause in the literal net. Used
+  // with A for additional filtering in METIS.
   class Subsume private[Subsumer] (
     containsEmpty: Boolean,
     units:         LiteralNet[F,P,(Literal[V,F,P],Clause[V,F,P],A)],
@@ -171,7 +174,12 @@ class Subsumer[V:Order,F,P,A] {
       if (size == 0)
         return false
 
-      if (litSyms.view.exists { this.units.matches(_).nonEmpty })
+      if (litSyms.view.exists { lit =>
+        this.units.matches(lit).find {
+          case (lit_,_,_) =>
+            !lit_.patMatch(Subst.empty[V,Term[V,F]],lit).isEmpty
+        }.isDefined
+      })
         return true
 
       if (size == 1)
