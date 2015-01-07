@@ -42,7 +42,7 @@ case class Clause[V:Order,F:Order,P:Order](lits: Set[Literal[V,F,P]])
       θ    <- unifyMatchOrdered(θ, Seq() ++ perm))
     yield θ).toList
   }
-  override def heuristicSize = lits.map(_.heuristicSize).sum
+  override def heuristicSize = lits.toList.map(_.heuristicSize).sum
 
   implicit val atomOrder = Order[Atom[V,F,P]].toScalaOrdering
 
