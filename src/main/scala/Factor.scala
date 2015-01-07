@@ -53,7 +53,7 @@ class Factor[V:Order,F,P] {
     apart: List[Edge],
     subEdges: List[SubEdge]) = {
     var apart = List[Edge]()
-    val allEdges = (subEdges.map { case SubEdge(_,edge) => edge }).tails.drop(2)
+    val allEdges = (subEdges.map { case SubEdge(_,edge) => edge }).tails.drop(1)
     for (
       acc@(SubEdge(θ, edge),agenda) <- subEdges.iterator zip allEdges;
       if (updateApart(θ,apart) match {
