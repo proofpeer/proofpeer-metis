@@ -60,8 +60,11 @@ object Resolution {
   }
 
   class system(s: waitingF.interpret.S, initThms: List[ithmF.IThm]) {
+    val (initActive,factoredThms) = active.factor(initThms)
+    val (s_,initW) = waiting.add(0,factoredThms,100).run(s)
+
     lazy val waitings1: Stream[(waitingF.interpret.S,waitingF.Waiting)] =
-      (s,waiting) #:: waitingF.interpret.preview(
+      (s_,initW) #:: waitingF.interpret.preview(
         zipWith3(distances,deduced,waitings2) {
             case (Some(dist),deduced,w) => w.add(dist,deduced,0)
             case (_,_,w)                => w.point[waitingF.interpret.M]
@@ -74,8 +77,8 @@ object Resolution {
       }
     }
 
-    lazy val actives: Stream[activeF.Active]   = active   #:: adeduced.map(_._1)
-    lazy val deduced: Stream[List[ithmF.IThm]] = initThms #:: adeduced.map(_._2)
+    lazy val actives: Stream[activeF.Active]   = initActive #:: adeduced.map(_._1)
+    lazy val deduced: Stream[List[ithmF.IThm]] = adeduced.map(_._2)
 
     lazy val wpulled:
         Stream[(waitingF.Waiting,Option[(Double,ithmF.IThm)])] = {
@@ -86,8 +89,7 @@ object Resolution {
     }
     lazy val waitings2 = wpulled.map(_._1)
     lazy val dpulled   = wpulled.map(_._2).map(unzipOption(_))
-    lazy val distances: Stream[Option[Double]]     =
-      Some[Double](0) #:: dpulled.map(_._1)
+    lazy val distances: Stream[Option[Double]]     = dpulled.map(_._1)
     lazy val pulled:    Stream[Option[ithmF.IThm]] = dpulled.map(_._2)
   }
 
