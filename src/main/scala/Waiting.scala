@@ -33,15 +33,27 @@ case class WaitingFactory[V:Order,F:Order,P,S,
         score       <- interpret.checkClause(maxChecks,ithm.clause);
         cl          = ithm.clause;
         litSize     = cl.lits.size;
-        litWeight   = litSize + 1;
+        litWeight   = litSize;
         freesWeight = cl.frees.size + 1;
         priority    = priorityFactor * ithm.id;
         trues       = score(true).toDouble;
         checks      = score(true).toDouble + score(false).toDouble;
-        modelWeight = Math.pow(1 + trues/checks,modelWeightFactor)
+        modelWeight = Math.pow(1 + trues/checks,modelWeightFactor);
+        weight      = distance * cl.heuristicSize * freesWeight * litWeight *
+                      modelWeight + priority
       )
-      yield distance * cl.heuristicSize * freesWeight * litWeight * modelWeight +
-      priority
+      yield {
+        // System.out.println("==========")
+        // Debug.printClause(ithm.clause.lits)
+        // System.out.println("dist: " + distance)
+        // System.out.println("symbolsW: " + cl.heuristicSize)
+        // System.out.println("variablesW: " + freesWeight)
+        // System.out.println("literalsW: " + litWeight)
+        // System.out.println("modelsW: " + modelWeight)
+        // System.out.println("weight: " + weight)
+        // System.out.println("==========")
+        weight
+      }
     }
 
     def add(
@@ -56,9 +68,13 @@ case class WaitingFactory[V:Order,F:Order,P,S,
           if (noPerturbations > 0) {
             val clsFrees = ithms.map { cl => (cl.clause, cl.clause.frees) }
             val perturbClauses =
-              clsFrees.traverse { case (cl,fvs) =>
-                interpret.liftRand(interpret.vals.random(fvs)) >>=
-                (interpret.randomPerturbation(cl,_))
+              clsFrees.traverse[interpret.M,Unit] { case (cl,fvs) =>
+                for (
+                  rv <- interpret.liftRand(interpret.vals.random(fvs));
+                  v  <- interpret.interpretClause(rv,cl);
+                  _  <- if (v) interpret.randomPerturbation(cl,rv)
+                        else ().point[interpret.M])
+                yield ()
               }
             perturbClauses.replicateM_(noPerturbations)
           }
@@ -81,7 +97,7 @@ case class WaitingFactory[V:Order,F:Order,P,S,
     def remove = {
       ithms.splitAt(1) match {
         case (head,rest) =>
-          head.headOption.map(ithm => (new Waiting(rest), ithm._2))
+          head.headOption.map { ithm => System.out.println(ithm._1);(new Waiting(rest),ithm._2) }
       }
     }
   }
