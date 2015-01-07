@@ -97,7 +97,7 @@ case class WaitingFactory[V:Order,F:Order,P,S,
     def remove = {
       ithms.splitAt(1) match {
         case (head,rest) =>
-          head.headOption.map { ithm => System.out.println(ithm._1);(new Waiting(rest),ithm._2) }
+          head.headOption.map { ithm => (new Waiting(rest),ithm._2) }
       }
     }
   }
