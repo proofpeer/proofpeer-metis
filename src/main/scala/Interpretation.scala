@@ -327,4 +327,23 @@ case class Interpretation[V,F,P](
     //     (state_,x) #:: preview(ns)(state_)
     // }
   }
+
+  // Debug
+  def printState(s: S, fp: F => String, pp: P => String) = {
+    def outI[F,Cod](fp: F => String, i: RInterpretation[F,Cod]) = {
+      for (
+        ((f,arity),lm) <- i.m;
+        (args,cod)     <- lm.m
+      ) {
+        System.out.println(fp(f) + "/" + arity + "(" +
+          (args.ns.map(_.n.toString) intersperse ", ").foldLeft("") {
+            case (str,xs) => str + xs
+          } + ")" + " = " + cod)
+      }
+    }
+
+    System.out.println(s.seed)
+    outI(fp, s.fis)
+    outI(pp, s.pis)
+  }
 }
