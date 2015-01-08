@@ -64,21 +64,20 @@ case class ActiveFactory[
     // resolved against. Why is this? There shouldn't be any other literals if it is
     // a *unit* theorem.
     private def resolveUnits(ithm: ithmFactory.IThm) = {
-      def resolve1(thm: ithmFactory.IThm, lit: Literal[V,F,P]): ithmFactory.IThm = {
+      def resolve1(thm: ithmFactory.IThm, lit: Literal[V,F,P]):
+          List[ithmFactory.IThm] = {
         for (
-          unitThm@ithmFactory.kernel.UnitThm(matchedPat,_)
+          unitThm@ithmFactory.kernel.UnitThm(matchedPat,ithm)
             <- units.matches(lit.negate);
-          θ <- matchedPat.patMatch(Subst.empty,lit).headOption;
+          θ <- matchedPat.patMatch(Subst.empty,lit.negate).headOption;
           resolvent <- ithmFactory.resolveUnit(
             thm,
-            ithmFactory.kernel.substUnit(θ,unitThm));
-          if { System.out.println("resolved a unit!"); true }
+            ithmFactory.kernel.substUnit(θ,unitThm))
         )
-          return resolvent
-        return thm
+        yield resolvent
       }
       ithm.clause.foldLeft(ithm) { case (thm,lit) =>
-        resolve1(ithm,lit)
+        resolve1(ithm,lit).headOption.getOrElse(thm)
       }
     }
 
@@ -108,12 +107,6 @@ case class ActiveFactory[
       val newLiterals =
         ithm.clause.largestLiterals(litOrder).foldLeft(this.literals) {
           (net,lit) => {
-            // System.out.println("Adding")
-            // System.out.println(printClause(ithm.clause.lits))
-            // lit match {
-            //   case lit_ :Literal[String,String,String] =>
-            //     System.out.println("at " + TermPrinter.printLiteral(lit_))
-            // }
             net.insert(lit,(lit,ithm))
           }
         }
@@ -154,8 +147,8 @@ case class ActiveFactory[
                       // TODO: Update the rewriter
                       val newUnits = simpedThm match {
                         case ithmFactory.IThm(_,ithmFactory.kernel.UnitThm(unit)) =>
-                          units.insert(unit.lit,unit)
-                        case _ => units
+                          active.units.insert(unit.lit,unit)
+                        case _ => active.units
                       }
                       val active2 = new Active(
                         active.rewriter,
