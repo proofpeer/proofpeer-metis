@@ -134,7 +134,7 @@ case class IThmFactory[V:Order,F:Order,P:Order,S,K <: Kernel[V,F,P]](
     * (As a simplification rule: does not generate a new theorem id)
     */
   def resolveUnit(ithm: IThm, unit: kernel.UnitThm) =
-    kernel.resolve(unit.lit, ithm.thm, unit.thm).map(new IThm(ithm.id, _))
+    kernel.resolve(unit.lit.negate, ithm.thm, unit.thm).map(new IThm(ithm.id, _))
 
   /** Obtain all factorings of a theorem, generating new clause ids for each. */
   def factor(ithm: IThm): List[IThm] = {
