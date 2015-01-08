@@ -65,14 +65,15 @@ case class IThmFactory[V:Order,F:Order,P:Order,S,K <: Kernel[V,F,P]](
     ithm2: IThm) = {
     val thm1  = ithm1.thm
     val thm2  = ithm2.thm
-    val lit2_ = lit2.negate
+    val nlit2 = lit2.negate
     for (
-      θ <- lit1.unify(Subst.empty[V,Term[V,F]],lit2_).headOption;
-      lit1_ = lit1.subst(θ);
+      θ <- lit1.unify(Subst.empty[V,Term[V,F]],nlit2).headOption;
+      lit1_  = lit1.subst(θ);
+      nlit2_ = lit1.negate;
       thm1_ = kernel.subst(θ,thm1);
       thm2_ = kernel.subst(θ,thm2);
       if litOrder.isLargerLiteral(thm1_.clause)(lit1_);
-      if litOrder.isLargerLiteral(thm2_.clause)(lit2);
+      if litOrder.isLargerLiteral(thm2_.clause)(nlit2_);
       resolvent <- kernel.resolve(lit1_,thm1_,thm2_))
     yield new IThm(newId, resolvent)
   }
