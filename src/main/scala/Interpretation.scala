@@ -89,23 +89,26 @@ case class Interpretation[V,F,P](
     for (
       s           <- get[S];
       newFI_value <- s.fis.interpret(f,args,liftRand(vals.fin.random));
-      _           <- put(S(s.seed,newFI_value._1,s.pis)))
+      s_          <- get[S];
+      _           <- put(S(s_.seed,newFI_value._1,s_.pis)))
     yield newFI_value._2
   }
 
   def interpretPredicate(p:P, args:vals.fin.ListFin): M[Boolean] = {
     for (
       s           <- get[S];
-      newFI_value <- s.pis.interpret(p,args,liftRand(MetisRNG.nextBoolean));
-      _           <- put(S(s.seed,s.fis,newFI_value._1)))
-    yield newFI_value._2
+      newPI_value <- s.pis.interpret(p,args,liftRand(MetisRNG.nextBoolean));
+      s_          <- get[S];
+      _           <- put(S(s_.seed,s_.fis,newPI_value._1)))
+    yield newPI_value._2
   }
 
   def reinterpretFunction(f:F, args:vals.fin.ListFin, img:vals.fin.Fin): M[Unit] = {
     for (
       s     <- get[S];
       newFI = s.fis.reinterpret(f,args,img);
-      _     <- put(S(s.seed,newFI,s.pis)))
+      s_    <- get[S];
+      _     <- put(S(s_.seed,newFI,s_.pis)))
     yield ()
   }
 
@@ -113,7 +116,8 @@ case class Interpretation[V,F,P](
     for (
       s     <- get[S];
       newPI = s.pis.reinterpret(p,args,img);
-      _     <- put(S(s.seed,s.fis,newPI)))
+      s_    <- get[S];
+      _     <- put(S(s_.seed,s_.fis,newPI)))
     yield ()
   }
 
@@ -239,13 +243,16 @@ case class Interpretation[V,F,P](
       case Var(_) => List[Perturbation]().point[M]
       case Fun((f,_),args) =>
         val argVals = args.map(valueModelTerm)
-        splits(argVals).zip(args).traverseM {
+        splits(argVals).reverse.zip(args).traverseM {
           case ((pre,v,suf),arg) =>
             val vs = vals.fin.filterM[M] { v_ =>
-              interpretFunction(
-                f,
-                vals.fin.ListFin(pre.reverse:::(v_ :: suf))).
-                map { fv => v != v_ && targets.contains(fv) }
+              if (v == v_)
+                false.point[M]
+              else
+                interpretFunction(
+                  f,
+                  vals.fin.ListFin(pre.reverse:::(v_ :: suf))).
+                  map { fv => targets.contains(fv) }
             }
             vs >>= (perturbTerm(arg,_))
         }.map {
@@ -268,13 +275,16 @@ case class Interpretation[V,F,P](
         for (
           margs   <- args.traverseU(toModelTerm(_,valuation));
           argVals = margs.map(valueModelTerm);
-          perts   <- splits(argVals).zip(margs).traverseM {
+          perts   <- splits(argVals).reverse.zip(margs).traverseM {
             case ((pre,v,suf),arg) =>
               val vs = vals.fin.filterM[M] { v_ =>
-                interpretPredicate(
-                  p,
-                  vals.fin.ListFin(pre.reverse:::(v :: suf))).
-                  map { pv => v != v_ && pv == isPositive }
+                if (v == v_)
+                  false.point[M]
+                else
+                  interpretPredicate(
+                    p,
+                    vals.fin.ListFin(pre.reverse:::(v_ :: suf))).
+                    map { pv => pv == isPositive }
               }
               vs >>= (perturbTerm(arg,_))
           }.map {
@@ -296,8 +306,16 @@ case class Interpretation[V,F,P](
     }
 
   def randomPerturbation(cl: Clause[V,F,P], valuation: vals.Valuation): M[Unit] =
-    perturbClause(cl, valuation) >>= {
-      ps => liftRand(MetisRNG.pickElement(ps)) >>= (applyPerturbation(_))
+    perturbClause(cl, valuation) >>= { ps =>
+      if (!ps.isEmpty) {
+        for (
+          p  <- liftRand(MetisRNG.pickElement(ps));
+          _  <- applyPerturbation(p);
+          v  <- interpretClause(valuation,cl)
+        )
+        yield ()
+      }
+      else ().point[M]
     }
 
   def runFrom[A](state: S, m: M[A]) = {
