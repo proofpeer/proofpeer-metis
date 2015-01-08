@@ -52,18 +52,17 @@ class LiteralOrdering[V:Order,F,P](kbo: KnuthBendix[V,F], predicateFunctor: P=>F
 
   def isLargerLiteral(lits: Set[Literal[V,F,P]]): Literal[V,F,P] => Boolean = {
     if (lits.isEmpty)
-      return _ => true
+      _ => true
     else {
-      // TODO: Check if this is the logic in Clause.sml between 131-133
-      val hasPositive = lits.exists(_.isPositive)
-      val tms = lits.filter { _.isPositive == hasPositive }
+      val allPositive = lits.forall(_.isPositive)
+      val tms = lits.filter { _.isPositive == allPositive }
         .flatMap { lit => atomToTerms(lit.atom) }.toList
       lit => lit match {
         case Literal(isPositive,atom) =>
-          if (isPositive == hasPositive)
+          if (isPositive == allPositive)
             notStrictlyLess(atomToTerms(atom), tms)
           else
-            hasPositive
+            allPositive
       }
     }
   }
