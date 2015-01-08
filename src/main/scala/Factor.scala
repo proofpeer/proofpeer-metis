@@ -29,14 +29,6 @@ class Factor[V:Order,F,P] {
     }
   }
 
-  private def factorEdge(lit1: Literal[V,F,P], lit2: Literal[V,F,P]) = {
-    if (lit1.isPositive != lit2.isPositive)
-      None
-    else {
-      val edge = FactorEdge(lit1.atom, lit2.atom)
-    }
-  }
-
   private def updateApart(θ: Subst[V,Term[V,F]], edges: List[Edge]):
       Option[List[Edge]] = {
     (for (
@@ -49,18 +41,16 @@ class Factor[V:Order,F,P] {
       yield edge).some
   }
 
-  private def initEdges(
-    apart: List[Edge],
-    subEdges: List[SubEdge]) = {
+  private def initEdges(subEdges: List[SubEdge]) = {
     var apart = List[Edge]()
     val allEdges = (subEdges.map { case SubEdge(_,edge) => edge }).tails.drop(1)
     for (
-      acc@(SubEdge(θ, edge),agenda) <- subEdges.iterator zip allEdges;
-      if (updateApart(θ,apart) match {
-        case Some(apart2) => apart = edge::apart2; true
-        case None         => false
-      }))
-      yield (apart,θ,agenda)
+      (SubEdge(θ, edge),agenda) <- subEdges.iterator zip allEdges;
+      Some(apart2)              <- List(updateApart(θ,apart)))
+    yield {
+      apart = edge::apart;
+      (apart2,θ,agenda)
+    }
   }
 
   private def combineSym[A,B](xs: Seq[A])(f: (A,A) => B): Seq[B] = {
@@ -101,7 +91,7 @@ class Factor[V:Order,F,P] {
         }
       case _ => List()
     }.flatten[SubEdge]
-    initEdges(apart,List() ++ neqSubEdges ++ litSubEdges)
+    initEdges(List() ++ neqSubEdges ++ litSubEdges)
   }
 
   private type Factor              = (List[Edge], Subst[V,Term[V,F]])
@@ -116,7 +106,7 @@ class Factor[V:Order,F,P] {
       case (apart,θ) =>
         joinEdge(θ,edge) match {
           case Joinable(σ) =>
-            (List(put(apart,σ)) ++
+            (List(put(edge::apart,θ)) ++
               (updateApart(σ,apart) match {
                 case Some(apart2) => List(put(apart2,σ))
                 case _            => List()
