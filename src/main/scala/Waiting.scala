@@ -1,6 +1,9 @@
 package proofpeer.metis
 
 import scala.collection.immutable._
+import scala.collection.immutable.MapLike
+import scala.collection.SetLike
+import scala.collection.TraversableLike
 import scalaz._
 import Scalaz._
 
@@ -20,11 +23,10 @@ case class WaitingFactory[V:Order,F:Order,P,S,
   private val maxChecks         = Some(20)
 
   class Waiting private (
-    ithms: SortedMap[Weight,(Distance,ithmFactory.IThm)]) {
+    ithms: SortedMap[Weight,List[(Distance,ithmFactory.IThm)]]) {
     def this() {
       this(SortedMap())
     }
-
     // DEBUG
     def theIthms = ithms
 
@@ -40,7 +42,8 @@ case class WaitingFactory[V:Order,F:Order,P,S,
         checks      = score(true).toDouble + score(false).toDouble;
         modelWeight = Math.pow(1 + trues/checks,modelWeightFactor);
         weight      = distance * cl.heuristicSize * freesWeight * litWeight *
-                      modelWeight + priority
+                      1.0 + priority
+//                      modelWeight + priority
       )
       yield {
         // System.out.println("==========")
@@ -83,21 +86,39 @@ case class WaitingFactory[V:Order,F:Order,P,S,
         val distance_ = distance + Math.log(ithms.length)
 
         val newIthms =
-          ithms.foldLeftM[interpret.M,SortedMap[Weight,(Distance,ithmFactory.IThm)]](
-            this.ithms) {
+          ithms.foldLeftM[
+            interpret.M,
+            SortedMap[Weight,List[(Distance,ithmFactory.IThm)]]](this.ithms) {
             case (ithms_,ithm) =>
               clauseWeight(distance_, ithm) map { w =>
-                ithms_ + ( w → (distance_,ithm) )
+                val wthms = ithms_.getOrElse(w,List())
+                ithms_ + ( w → ((distance_,ithm)::wthms))
               }
           }
         perturb >> newIthms map (new Waiting(_))
       }
     }
 
+    object EmptyMap {
+      def unapply(map: SortedMap[Weight,List[(Distance,ithmFactory.IThm)]]) =
+        map.isEmpty
+    }
+
+    object MapCons {
+      def unapply(map: SortedMap[Weight,List[(Distance,ithmFactory.IThm)]]) = {
+        val (head,rest) = map.splitAt(1)
+        head.headOption.map { case h => (h,rest) }
+      }
+    }
+
     def remove = {
-      ithms.splitAt(1) match {
-        case (head,rest) =>
-          head.headOption.map { ithm => (new Waiting(rest),ithm._2) }
+      ithms match {
+        case EmptyMap() => None
+        case MapCons((w,List(dithm)), rest) =>
+          Some((new Waiting(rest),dithm))
+        case MapCons((w,dithm::dithms), rest) =>
+          Some((new Waiting(rest + (w → dithms)), dithm))
+        case _ => throw new Error("Bug: Waiting.remove")
       }
     }
   }
