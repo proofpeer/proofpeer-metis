@@ -40,21 +40,23 @@ class Subsumer[V:Order,F,P,A] {
     }
 
     // θ is used to shortcut the search when an impossible bottleneck is found.
-    var θ = Subst.empty[V,Term[V,F]]
+    var (θ:Option[Subst[V,Term[V,F]]]) = Some(Subst.empty[V,Term[V,F]])
     val σss = {
-      for (lit2 <- lits2)
+      for (
+        lit1 <- lits1;
+        θ_   <- θ.toList)
       yield {
         for (
-          lit1 <- lits1;
-          σ    <- lit1.patMatch(θ, lit2))
+          lit2 <- lits2;
+          σ    <- lit1.patMatch(θ_, lit2))
         yield σ }.toList match {
         case List()  => return false
-        case List(σ) => θ = σ; List(σ)
+        case List(σ) => θ = θ_.union(σ); List(σ)
         case σs      => σs
       }
     }.sortBy(_.length)
 
-    search(θ, σss.toList)
+    (θ.map(search(_, σss.toList))).getOrElse(false)
   }
 
   // We don't really need to store the clause in the literal net. Used
