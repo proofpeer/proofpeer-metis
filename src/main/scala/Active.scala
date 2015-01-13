@@ -84,9 +84,10 @@ case class ActiveFactory[
     private def sortUtilityWise(thms: List[ithmFactory.IThm]) = {
       thms.sortWith {
         case (thm1,thm2) =>
-          thm1.isContradiction || !thm2.isContradiction ||
-          thm1.isUnitEql || !thm2.isUnitEql ||
-          (thm1.clause.lits.size < thm2.clause.lits.size)
+          thm1.isContradiction ||
+          thm1.isUnitEql && !thm2.isContradiction ||
+          thm1.clause.lits.size < thm2.clause.lits.size && !thm2.isContradiction &&
+             !thm2.isUnitEql
       }
     }
 
@@ -126,7 +127,6 @@ case class ActiveFactory[
     // rewrites are added permanently.
     def factor(thms: List[ithmFactory.IThm]): (Active,List[ithmFactory.IThm]) = {
       val sortedThms = sortUtilityWise(thms)
-
       val (active,_,newThms) =
         sortedThms.foldLeft(this,this.subsume,List[ithmFactory.IThm]()) {
         // Presimplify
