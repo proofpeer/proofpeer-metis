@@ -120,6 +120,14 @@ class Factor[V:Order,F,P] {
     agenda.map(fact1).sequence.exec(apart,θ).map(_._2)
   }
 
+  /** As factor, but works on an arbitrary set of literals.
+    */
+  def factorLits(lits: Set[Literal[V,F,P]]): Iterator[Subst[V,Term[V,F]]] = {
+    mkEdges(List() ++ lits).flatMap {
+      case (apart,θ,agenda) => fact(apart,θ,agenda)
+    }
+  }
+
   /** Obtain the factorings substitutions of clause cl. Each factoring
       substitution θ is such that cl[θ], after removal of instances of
       reflexivity and removing redundant symmetric equalities, contains
@@ -127,8 +135,6 @@ class Factor[V:Order,F,P] {
       cl[σ] is subsumed by cl[θ] for one of the returned substitutions θ.
       */
   def factor(cl: Clause[V,F,P]): Iterator[Subst[V,Term[V,F]]] = {
-    mkEdges(List() ++ cl.lits).flatMap {
-      case (apart,θ,agenda) => fact(apart,θ,agenda)
-    }
+    factorLits(cl.lits)
   }
 }

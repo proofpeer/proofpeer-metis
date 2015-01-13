@@ -63,6 +63,7 @@ case class IThmFactory[V:Order,F:Order,P:Order,S,K <: Kernel[V,F,P]](
     ithm1: IThm,
     lit2: Literal[V,F,P],
     ithm2: IThm) = {
+
     val thm1  = ithm1.thm
     val thm2  = ithm2.thm
     val nlit2 = lit2.negate
@@ -136,10 +137,11 @@ case class IThmFactory[V:Order,F:Order,P:Order,S,K <: Kernel[V,F,P]](
   def resolveUnit(ithm: IThm, unit: kernel.UnitThm) =
     kernel.resolve(unit.lit.negate, ithm.thm, unit.thm).map(new IThm(ithm.id, _))
 
-  /** Obtain all factorings of a theorem, generating new clause ids for each. */
+  /** Obtain all factorings of a theorem's largest literals, generating new clause
+    ids for each. */
   def factor(ithm: IThm): List[IThm] = {
     for (
-      θ <- factoring.factor(ithm.clause).toList)
+      θ <- factoring.factorLits(ithm.clause.largestLiterals(litOrder)).toList)
     yield new IThm(ithm.id, kernel.subst(θ,ithm.thm))
   }
 }
