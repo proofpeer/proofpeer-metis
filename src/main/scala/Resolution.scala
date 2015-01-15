@@ -94,14 +94,15 @@ object Resolution {
   }
 
   def main(args: Array[String]) {
-    val problemSet = testing.tptp.Axioms.SET001_MINUS1
+    val problemSet = proofpeer.metis.testing.tptp.Problems.SET.SET009_MINUS1
 
     val problem = problemSet.clauses.map { lits =>
       Resolution.ithmF.axiom(Clause(lits.toSet))
     }
-    val sys = new Resolution.system(
-      Resolution.waitingF.interpret.run(1.point[Resolution.waitingF.interpret.M])._1,
-      problem)
-    sys.waitings2(0)
+    val sys = new Resolution.system(waitingF.interpret.initState,problem)
+
+    val noSteps = sys.dpulled.takeWhile { thm2 => !(thm2._2.get.isContradiction) }.
+      zipWithIndex.length
+    System.out.println(noSteps)
   }
 }

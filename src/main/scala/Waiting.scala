@@ -42,21 +42,9 @@ case class WaitingFactory[V:Order,F:Order,P,S,
         checks      = score(true).toDouble + score(false).toDouble;
         modelWeight = Math.pow(1 + trues/checks,modelWeightFactor);
         weight      = distance * cl.heuristicSize * freesWeight * litWeight *
-                      1.0 + priority
-//                      modelWeight + priority
+                      modelWeight + priority
       )
-      yield {
-        // System.out.println("==========")
-        // Debug.printClause(ithm.clause.lits)
-        // System.out.println("dist: " + distance)
-        // System.out.println("symbolsW: " + cl.heuristicSize)
-        // System.out.println("variablesW: " + freesWeight)
-        // System.out.println("literalsW: " + litWeight)
-        // System.out.println("modelsW: " + modelWeight)
-        // System.out.println("weight: " + weight)
-        // System.out.println("==========")
-        weight
-      }
+      yield weight
     }
 
     def add(

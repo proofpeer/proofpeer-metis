@@ -198,7 +198,5 @@ case class ActiveFactory[
       }
       else factor(List(simpedThm))
     }
-    // Debug
-    def getLiterals = this.literals
   }
 }
