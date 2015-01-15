@@ -94,7 +94,9 @@ object Resolution {
   }
 
   def main(args: Array[String]) {
-    val problem = testing.tptp.Axioms.SET001_MINUS1.clauses.map { lits =>
+    val problemSet = testing.tptp.Axioms.SET001_MINUS1
+
+    val problem = problemSet.clauses.map { lits =>
       Resolution.ithmF.axiom(Clause(lits.toSet))
     }
     val sys = new Resolution.system(
