@@ -7,6 +7,7 @@ import org.scalatest.{FlatSpec}
 import proofpeer.metis._
 
 class TermSpec extends FlatSpec {
+
   val termParsers = new TermParsers()
   def parseTerm(str: String) = {
     val tokens = new termParsers.lexical.Scanner(str)
@@ -21,28 +22,29 @@ class TermSpec extends FlatSpec {
     termParsers.parseLit(tokens)
   }
 
-  val kernel = new Thm.Kernel[String,String,String]
+  val kernel = new Kernel[String,String,String]
   type StringTerm = Term[String,String]
   type StringAtom = Atom[String,String,String]
   type StringLit = Literal[String,String,String]
-  type StringThm = Thm[String,String,String]
   type QSubst = PartialFunction[String,Term[Unit,(String,Int)]]
-  type Conv = StringTerm => Option[(StringTerm,StringThm)]
+  type Conv = StringTerm => Option[(StringTerm,kernel.Thm)]
   type TermNet = Nets.TermNet[String, Conv]
+
+  import ClauseInstances._
 
   // Remember that Term.termMatch overmatches. Should we check in the conversion and
   // return None as appropriate, or let this be handled in repeatTopDownConvRule?
   // I'd prefer the former for now, even if it leads to duplicate code. I'd rather
   // enforce the rule that invalid conversions do not silently fail, but are
   // regarded as errors.
-  def addRewrite(eq: StringThm, net: TermNet) = {
+  def addRewrite(eq: kernel.Thm, net: TermNet) = {
     val Literal(true,Eql(lhs,rhs)) = eq.clause.filter {
       case Literal(true,Eql(_,_)) => true
       case _ => false
     }.head
     net.insert(lhs, { tm =>
-      Term.termMatch(Map(), lhs, tm).map { θ =>
-        (Term.subst(θ,rhs),kernel.subst(θ,eq)) }
+      lhs.patMatch(Subst.empty, tm).headOption.map { θ =>
+        (rhs.subst(θ),kernel.subst(θ,eq)) }
     })
   }
 
@@ -80,20 +82,23 @@ class TermSpec extends FlatSpec {
     else "") + ppAtom(lit.atom)
   }
 
-  def ppThm(thm: StringThm): String = {
-    concatStrings(thm.clause.toList.map(ppLit(_)).intersperse("\n ∨ "))
+  def ppThm(thm: kernel.Thm): String = {
+    concatStrings(thm.clause.lits.toList.map(ppLit(_)).intersperse("\n ∨ "))
   }
 
   var rewrNet:TermNet = new Nets.TermNet()
-  rewrNet = addRewrite(kernel.axiom(Set() +
-    parseLit("Plus(x,Zero) = x").get +
-    parseLit("~PlusId").get), rewrNet)
-  rewrNet = addRewrite(kernel.axiom(Set() +
-    parseLit("Times(x,Zero) = Zero").get +
-    parseLit("~TimesZero").get), rewrNet)
-  rewrNet = addRewrite(kernel.axiom(Set() +
-    parseLit("Times(x,One) = x").get +
-    parseLit("~TimesId").get), rewrNet)
+  rewrNet = addRewrite(kernel.axiom(Clause(Set(
+    parseLit("Plus(x,Zero) = x").get,
+    parseLit("~PlusId").get))),
+    rewrNet)
+  rewrNet = addRewrite(kernel.axiom(Clause(Set(
+    parseLit("Times(x,Zero) = Zero").get,
+    parseLit("~TimesZero").get))),
+    rewrNet)
+  rewrNet = addRewrite(kernel.axiom(Clause(Set(
+    parseLit("Times(x,One) = x").get,
+    parseLit("~TimesId").get))),
+    rewrNet)
 
   val lit1 = parseLit("P(Plus(x,Times(y,Times(Zero,One))))").get
   val rewrLit1 = rewrite(rewrNet,lit1)

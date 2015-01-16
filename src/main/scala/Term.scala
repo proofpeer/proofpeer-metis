@@ -274,6 +274,12 @@ class KnuthBendix[V:Order,F:Order](funWeight: (F,Int) => Int)(
 object KnuthBendix {
   def kbo[V,F](implicit
   ordInt: Order[Int], ordV: Order[V], ordF: Order[F], ordFun: Order[Fun[V,F]]) = {
-    new KnuthBendix[V,F]( { (_,_) => 1 } )
+    new KnuthBendix[V,F]( { case (_,_) => 1 } )
+  }
+
+  def precendenceOrder[V,F:Order] = new Order[Fun[V,F]] {
+    def order(f: Fun[V,F], g: Fun[V,F]) = {
+      (f.args.length,f.f) ?|? (g.args.length,g.f)
+    }
   }
 }
