@@ -322,10 +322,10 @@ case class Interpretation[V,F,P](
     m.run(state)
   }
 
-  val initState = S(0L,RInterpretation.empty,RInterpretation.empty)
+  def initState(seed: Long) = S(seed,RInterpretation.empty,RInterpretation.empty)
 
-  def run[A](m: M[A]) = {
-    m.run(initState)
+  def run[A](seed: Long, m: M[A]) = {
+    m.run(initState(seed))
   }
 
 
