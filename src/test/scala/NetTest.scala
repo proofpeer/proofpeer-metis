@@ -2,6 +2,8 @@ package proofpeer.metis.testing
 
 import proofpeer.metis._
 import org.scalatest.{FlatSpec}
+import scalaz._
+import Scalaz._
 
 class NetSpec extends FlatSpec {
     val tm1: Term[String,String] =
@@ -39,7 +41,7 @@ class NetSpec extends FlatSpec {
   assert(net.matched(tm6) == List(1))
   assert(net.matched(tm7) == List(1,2,4))
   assert(net.unifies(tm1) == List(1,2,4))
-  assert(net.unifies(tm6) == List(1))
+  assert(net.unifies(tm6) == List(1,4))
   assert(net.unifies(tm7) == List(1,2,4))
   assert(net.size == 5)
   assert(net.filter(_ => false).size == 0)

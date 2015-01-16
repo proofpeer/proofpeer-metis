@@ -76,7 +76,8 @@ object Nets {
         case _                                      => None
       }
       case (tm,Var(())) => Some(θ)
-      case (Fun(f1,fargs),Fun((f2,_),qargs)) if f1 == f2 =>
+      case (Fun(f1,fargs),Fun((f2,_),qargs))
+          if f1 == f2 && fargs.length == qargs.length =>
         fargs.zip(qargs).foldLeftM(θ) {
           case (θ,(farg,qarg)) =>
             unifiesQTerm(θ,farg,qarg)
@@ -107,8 +108,8 @@ object Nets {
           val fargsNet =
             for
               (((f,arity),net2) <- fnet.iterator;
-                (fargs,net3) <- nextArgs(arity,net2);
-                (args,net4) <- nextArgs(n - 1,net3))
+                (fargs,net3)    <- nextArgs(arity,net2);
+                (args,net4)     <- nextArgs(n - 1,net3))
             yield (Fun((f,arity),fargs)::args, net4)
           vargsNet ++ fargsNet
         case _ => List()
@@ -157,7 +158,8 @@ object Nets {
       Boolean =
     (term,qpat) match {
       case (_,Var(())) => true
-      case (Fun(f1,args),Fun((f2,_),qpats)) if f1 == f2 =>
+      case (Fun(f1,args),Fun((f2,_),qpats))
+          if f1 == f2 && args.length == qpats.length =>
         args.view.zip(qpats).map {
           case (arg,qpat2) => termMatchesQPat(arg,qpat2)
         }.foldLeft(true) { _ && _ }
@@ -165,7 +167,9 @@ object Nets {
         false
     }
 
-  private def matchesArgs[V,F,A](args: List[Term[V,F]],net:TermNetImpl[F,A]): List[A] =
+  private def matchesArgs[V,F,A](
+    args: List[Term[V,F]],
+    net:TermNetImpl[F,A]): List[A] =
     (args,net) match {
       case (List(),Result(xs)) => xs
       case (arg::args,Stem(pat,net2)) =>
@@ -369,10 +373,8 @@ object Nets {
     // }
 
     /** Return all values where tm can be unified with the key. */
-    def unifies[V](tm: Term[V,F]):
-        List[A] = {
+    def unifies[V](tm: Term[V,F]): List[A] =
       unifiesArgs(Map(),List(tm),this.termNet)
-    }
   }
 
   /** A factor for trie-like maps from atoms to values.
