@@ -1,0 +1,25 @@
+// Generated from Poly/ML implementation of Metis
+
+(Fn ("f", [Fn ("a", [])]), Fn ("g", [Fn ("b", [])]))
+(Fn ("f", [Fn ("a", []), Fn ("b", [])]), Fn ("g", [Fn ("b", [])]))
+(Fn ("f", [Var "x"]), Fn ("g", [Fn ("a", [])]))
+(Fn ("f", [Fn ("a", []), Var "x"]), Fn ("g", [Var "x"]))
+(Fn ("f", [Var "x"]), Fn ("g", [Var "x"]))
+(Fn ("f", [Var "x"]), Fn ("f", [Var "x"]))
+(Fn ("+", [Var "x", Var "y"]), Fn ("+", [Var "x", Var "x"]))
+(Fn ("+", [Fn ("+", [Var "x", Var "y"]), Var "x"]),
+    Fn ("+", [Fn ("+", [Var "y", Var "x"]), Var "x"]))
+(Fn ("+", [Fn ("+", [Var "x", Var "y"]), Var "x"]),
+    Fn ("+", [Fn ("*", [Var "y", Var "x"]), Var "x"]))
+(Fn ("a", []), Var "x")
+(Fn ("f", [Fn ("a", [])]), Var "x")
+(Fn ("f", [Var "x", Fn ("f", [Var "y", Var "z"])]),
+    Fn ("f", [Fn ("f", [Var "x", Var "y"]), Var "z"]))
+(Fn ("f", [Fn ("g", [Var "x", Fn ("a", [])])]),
+    Fn ("f", [Fn ("h", [Fn ("a", []), Var "x"])]))
+(Fn ("f", [Fn ("g", [Fn ("a", [])])]), Fn ("f", [Fn ("h", [Var "x"])]))
+(Fn ("f", [Fn ("h", [Fn ("a", [])])]), Fn ("f", [Fn ("g", [Var "x"])]))
+(Fn ("f", [Var "y"]),
+    Fn ("f", [Fn ("g", [Fn ("a", []), Fn ("b", []), Fn ("c", [])])]))
+(Fn ("+", [Fn ("*", [Var "x", Var "y"]), Fn ("*", [Var "x", Var "z"])]),
+    Fn ("*", [Var "x", Fn ("+", [Var "y", Var "z"])]))
