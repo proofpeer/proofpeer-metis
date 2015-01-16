@@ -8,16 +8,10 @@ import Scalaz._
 import Ordering._
 
 class AtomSpec extends FlatSpec {
-  "Knuth Bendix Ordering port" should " agree with original test suite" in {
-    class ordFun[V,F](implicit
-      ordInt:Order[Int],
-      ordV:Order[V],
-      ordF:Order[F]) extends Order[Fun[V,F]] {
-      def order(fun1: Fun[V,F],fun2: Fun[V,F]) =
-        (fun1.args.length,fun1.f) ?|? (fun2.args.length,fun2.f)
-    }
-    implicit val ordFun = new ordFun[String,String]
-    val kb = new KnuthBendix[String,String]((_:Fun[String,String]) => 1:Int)
+  "Knuth Bendix Ordering port" should " agree with original test suite" in
+  {
+    implicit val ordFun = KnuthBendix.precendenceOrder[String,String]
+    val kb = new KnuthBendix[String,String]({ case (_,_) => 1:Int })
 
     val tm1: Term[String,String] =
       Fun("f", List(
