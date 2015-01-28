@@ -42,7 +42,7 @@ case class FinOrd(size: Int) {
   def filter(p: Fin => Boolean) = {
     for (
       i <- 0 to (size-1);
-      val f = Fin(i)
+      f = Fin(i);
       if p(f))
     yield f
   }

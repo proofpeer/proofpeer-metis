@@ -1,30 +1,27 @@
 package proofpeer.metis
 
+import proofpeer.metis.util.{PartialOrder}
+import proofpeer.metis.util.RichCollectionInstances._
 import scala.collection.immutable._
+import scala.language.higherKinds
 import scalaz._
 import Scalaz._
 
 case class ActiveFactory[
-  V:Order,F:Order,P:Order,S,
-  K <: Kernel[V,F,P],
-  ITF <: IThmFactory[V,F,P,S,K]](
-  ithmFactory: ITF,
-  litOrder: LiteralOrdering[V,F,P])(implicit ordFun: Order[Fun[V,F]]) {
+  V:Order,
+  F:Order,
+  P:Order,
+  FV,
+  K<:Kernel[V,F,P],
+  ITF<:IThmFactory[V,F,P,FV,K]](
+  ithmF: ITF,
+  litOrder: LiteralOrdering[V,F,P],
+  subsumer: Subsuming[V,F,P,Int])(
+  implicit ordFun: Order[Fun[V,F]], termOrd: PartialOrder[Term[V,F]]) {
+
+  val rewriting = METISRewriting[V,F,P,FV,ithmF.kernel.type](ithmF.kernel)
 
   import ClauseInstances._
-
-  val rewriting = new Rewriting[V,F,P,ithmFactory.kernel.type](ithmFactory.kernel)
-  val subsumer  = new Subsumer[V,F,P,Clause[V,F,P]]
-
-  private[ActiveFactory] case class Equation(
-    literal:     Literal[V,F,P],
-    orientation: rewriting.Direction,
-    redex:       Term[V,F])
-
-  private[ActiveFactory] class Subterm(
-    literal:     Literal[V,F,P],
-    path:        Term.Path,
-    subterm:     Term[V,F])
 
   // units: map from a literal to a unit theorem of that literal. Used for fast
   // resolution.
@@ -37,42 +34,94 @@ case class ActiveFactory[
   // literal where the subterm occurs at the given path.
   // allSubterms: map from a subterm to a theorem containing that subterm somewhere.
   // Used to check if an equation can be used for some rewriting.
-  case class Active (
-    rewriter:    rewriting.Rewrite,
+  case class Active(
+    clauses:     Map[Int,ithmF.IThm],
+    rewriter:    rewriting.Rewriter,
+    units:       Nets.LiteralNet[F,P,ithmF.UnitIThm],
     subsume:     subsumer.Subsume,
-    clauses:     Map[Int,List[ithmFactory.IThm]],
-    units:       Nets.LiteralNet[F,P,ithmFactory.kernel.UnitThm],
-    literals:    Nets.LiteralNet[F,P,(Literal[V,F,P],ithmFactory.IThm)],
-    equations:   Nets.TermNet[F,(ithmFactory.IThm, Equation)],
-    subterms:    Nets.TermNet[F,(ithmFactory.IThm, Subterm)],
-    allSubterms: Nets.TermNet[F,(ithmFactory.IThm, Term[V,F])]) {
+    literals:    Nets.LiteralNet[F,P,(Literal[V,F,P],ithmF.IThm)],
+    equations:   Nets.TermNet[F,(ithmF.RewriteCursor,ithmF.IThm)],
+    subterms:    Nets.TermNet[F,(ithmF.kernel.TermCursor,ithmF.IThm)],
+    allSubterms: Nets.TermNet[F,(Term[V,F],ithmF.IThm)]) {
 
     def this() {
       this(
-        new rewriting.Rewrite(),
-        new subsumer.Subsume(),
         Map(),
+        new rewriting.Rewriter,
         new Nets.LiteralNet,
+        new subsumer.Subsume,
         new Nets.LiteralNet,
-        new Nets.TermNet(),
-        new Nets.TermNet(),
-        new Nets.TermNet())
+        new Nets.TermNet,
+        new Nets.TermNet,
+        new Nets.TermNet)
+    }
+
+    def addClause(ithm: ithmF.IThm) = {
+      val largestLiterals  = ithm.clause.largestLiterals(litOrder)
+      val largestEquations = ithmF.RewriteCursor.rewrites(ithm)
+      val largestSubterms  = ithm.thm.largestSubterms(litOrder)
+      val clSubterms       = ithm.thm.clause.allSubterms
+      val newLiterals = largestLiterals.foldLeft(literals) {
+        case (net,lit) => net.insert(lit,(lit,ithm))
+        }
+      val newEquations = largestEquations.foldLeft(equations) {
+        case (net,eqn) => net.insert(eqn.lhs,(eqn,ithm))
+      }
+      val newSubterms = largestSubterms.foldLeft(subterms) {
+        case (net,tm) => net.insert(tm.get,(tm,ithm))
+      }
+      val newAllSubterms = clSubterms.foldLeft(allSubterms) {
+        case (net,tm) => net.insert(tm.get,(tm.get,ithm))
+      }
+
+      Active(
+        clauses,
+        rewriter,
+        units,
+        this.subsume.insert(ithm.clause, ithm.id),
+        newLiterals,
+        newEquations,
+        newSubterms,
+        newAllSubterms)
+    }
+
+    def deduceResolutions(ithm: ithmF.IThm) =
+      for (
+        lit          <- ithm.clause.largestLiterals(litOrder);
+        (lit2,ithm2) <- literals.unifies(lit.negate);
+        resolvent    <- ithmF.resolve(lit, ithm, lit2, ithm2))
+      yield resolvent
+
+    def deduceParamodulations(ithm: ithmF.IThm) = {
+      val rewrites = ithm.rewrites
+      val paraWith =
+        for (
+          rewr        <- rewrites;
+          (subterm,_) <- subterms.unifies(rewr.lhs);
+          deduced     <- ithmF.paramodulate(rewr, subterm))
+        yield deduced
+      val paraInto =
+        if (equations.isEmpty)
+          List[ithmF.IThm]()
+        else
+          for (
+            subterm  <- ithm.thm.largestSubterms(litOrder);
+            (rewr,_) <- equations.unifies(subterm.get);
+            deduced  <- ithmF.paramodulate(rewr, subterm))
+          yield deduced
+      paraWith ++ paraInto
     }
 
     // TODO: Check against original METIS. Hurd accumulates a variable "news", which
     // appears to be built out of the other literals in the unit-theorem being
     // resolved against. Why is this? There shouldn't be any other literals if it is
     // a *unit* theorem.
-    private def resolveUnits(ithm: ithmFactory.IThm) = {
-      def resolve1(thm: ithmFactory.IThm, lit: Literal[V,F,P]):
-          List[ithmFactory.IThm] = {
+    def resolveUnits(ithm: ithmF.IThm) = {
+      def resolve1(thm: ithmF.IThm, lit: Literal[V,F,P]):
+          List[ithmF.IThm] = {
         for (
-          unitThm@ithmFactory.kernel.UnitThm(matchedPat,ithm)
-            <- units.matches(lit.negate);
-          θ <- matchedPat.patMatch(Subst.empty,lit.negate).headOption;
-          resolvent <- ithmFactory.resolveUnit(
-            thm,
-            ithmFactory.kernel.substUnit(θ,unitThm))
+          unitIThm  <- units.matches(lit.negate);
+          resolvent <- thm.resolveUnit(lit,unitIThm).toList
         )
         yield resolvent
       }
@@ -81,107 +130,21 @@ case class ActiveFactory[
       }
     }
 
-    private def sortUtilityWise(thms: List[ithmFactory.IThm]) = {
-      thms.sortWith {
-        case (thm1,thm2) =>
-          thm1.isContradiction ||
-          thm1.isUnitEql && !thm2.isContradiction ||
-          thm1.clause.lits.size < thm2.clause.lits.size && !thm2.isContradiction &&
-             !thm2.isUnitEql
-      }
+    def rewrite(ithm: ithmF.IThm) = {
+      val conv  = rewriter.rewr(ithm.id);
+      ithm.repeatTopDownConvRule(conv);
     }
 
-    def simplifyWith(subsume: subsumer.Subsume, ithm: ithmFactory.IThm) = {
+    def simplify(ithm: ithmF.IThm) =
       for (
-        ithm <- ithmFactory.simplify(ithm);
-        // TODO: Rewrite
-        ithm2 = resolveUnits(ithm);
-        if !subsume.isStrictlySubsumed(ithm2.clause)
+        simped    <- ithm.simplify;
+        rewritten <- rewrite(simped);
+        ithm_     = resolveUnits(rewritten);
+        if !subsume.isStrictlySubsumed(ithm_.clause)
       )
-      yield ithm2
-    }
+      yield ithm_
 
-    def simplify(ithm: ithmFactory.IThm) = simplifyWith(this.subsume, ithm)
-
-    def addClause(ithm: ithmFactory.IThm) = {
-      // TODO: Deal with equations
-      val newLiterals =
-        ithm.clause.largestLiterals(litOrder).foldLeft(this.literals) {
-          (net,lit) => {
-            net.insert(lit,(lit,ithm))
-          }
-        }
-      new Active(
-        rewriter,
-        subsume.insert(ithm.clause,ithm.clause),
-        clauses,
-        units,
-        newLiterals,
-        equations,
-        subterms,
-        allSubterms)
-    }
-
-    // TODO: Pretty horrible. The subsumer is only temporarily extended to
-    // filter the factor clauses, and then the original is restored. Units and
-    // rewrites are added permanently.
-    def factor(thms: List[ithmFactory.IThm]): (Active,List[ithmFactory.IThm]) = {
-      val sortedThms = sortUtilityWise(thms)
-      val (active,_,newThms) =
-        sortedThms.foldLeft(this,this.subsume,List[ithmFactory.IThm]()) {
-        // Presimplify
-        case ((active,subsume,newThms),thm) =>
-          active.simplifyWith(subsume,thm) match {
-            case None      => (active,subsume,newThms)
-            case Some(thm) =>
-              sortUtilityWise(
-                thm::ithmFactory.factor(thm))
-                .foldLeft(active,subsume,newThms) {
-
-                // Postsimplify
-                case ((active,subsume,newThms_),thm) =>
-                  active.simplifyWith(subsume,thm) match {
-                    case None =>
-                      (active,subsume,newThms_)
-                    case Some(simpedThm) =>
-                      // TODO: Update the rewriter
-                      val newUnits = simpedThm match {
-                        case ithmFactory.IThm(_,ithmFactory.kernel.UnitThm(unit)) =>
-                          active.units.insert(unit.lit,unit)
-                        case _ => active.units
-                      }
-                      val active2 = new Active(
-                        active.rewriter,
-                        active.subsume,
-                        active.clauses,
-                        newUnits,
-                        active.literals,
-                        active.equations,
-                        active.subterms,
-                        active.allSubterms)
-                      (
-                        active2,
-                        subsume.insert(simpedThm.clause,simpedThm.clause),
-                        simpedThm::newThms_
-                      )
-                  }
-            }
-          }
-        }
-      (active,newThms)
-      // TODO: Extract rewritable (and probably make tail-recursive)
-    }
-
-    def deduceResolutions(ithm: ithmFactory.IThm) = {
-      for (
-        lit          <- ithm.clause.largestLiterals(litOrder);
-        (lit2,ithm2) <- literals.unifies(lit.negate);
-        resolvent    <- ithmFactory.resolve(lit, ithm, lit2, ithm2))
-      yield resolvent
-    }
-
-    def add(ithm: ithmFactory.IThm):
-        (Active,List[ithmFactory.IThm]) = {
+    def add(ithm: ithmF.IThm):(Active,List[ithmF.IThm]) = {
       val simpedThm = simplify(ithm) match {
         case None                             =>
           return (this,List())
@@ -190,13 +153,126 @@ case class ActiveFactory[
         case Some(ithm) => ithm
       }
 
-      if (simpedThm == ithm) {
-        val active   = addClause(ithm)
-        val freshThm = ithmFactory.freshen(ithm)
-        val derived  = active.deduceResolutions(freshThm)
-        active.factor(derived.toList)
-      }
-      else factor(List(simpedThm))
+      val deductions =
+        if (simpedThm == ithm) {
+          val active   = addClause(ithm)
+          val freshThm = ithm.freshen
+            active.deduceResolutions(freshThm) ++
+          deduceParamodulations(freshThm)
+        }
+        else List(simpedThm)
+
+      return null
     }
   }
+
+  // Hurd's factor logic as writing out a list of new theorems whilst updating
+  // active.
+  type SWState[A] = State[Active,A]                  // State monad
+  type WT[M[_],A] = WriterT[M, List[ithmF.IThm], A]  // Writer transformer
+  type SW[A] = WT[SWState, A]                        // Factor monad
+
+  // Lift get and put up to SW
+  val getSW: SW[Active] = get[Active].liftM[WT]
+  def modifySW(f: Active => Active): SW[Unit] = modify[Active](f).liftM[WT]
+  def putSW(active: Active): SW[Unit] = put[Active](active).liftM[WT]
+
+  def addFactorSW(ithm: ithmF.IThm): SW[Unit] =
+    for (
+      active <- getSW;
+      newRewriter = rewriting.Equation.ofThm(ithm.thm) match {
+        case Some(eqn) => active.rewriter.add(ithm.id,eqn)
+        case None      => active.rewriter
+      };
+      newUnits = ithmF.UnitIThm.getUnit(ithm) match {
+        case Some(unit@ithmF.UnitIThm(lit,_)) =>
+          active.units.insert(lit,unit)
+        case _ => active.units;
+      };
+      newSubsumer = active.subsume.insert(ithm.clause,ithm.id);
+      _ <- modifySW(
+        _.copy(units = newUnits, subsume = newSubsumer))
+    )
+    yield ()
+
+  def simplifySW(ithm: ithmF.IThm): SW[Option[ithmF.IThm]] =
+    getSW.map (_.simplify(ithm))
+
+  // Apply f to its simplification (ignoring tautologies)
+  def traverseSimplifies(ithms: List[ithmF.IThm])(f: ithmF.IThm => SW[Unit]):
+      SW[Unit] =
+    ithms.traverse_ { ithm =>
+      simplifySW(ithm) >>= {
+        case None         => ().point[SW]
+        case Some(simped) => f(simped)
+      }
+    }
+
+  def findRewritables(active: Active) = {
+    active.clauses.values.toSet.filter { ithm =>
+      active.rewrite(ithm).filter (_ != ithm).isDefined
+    }
+  }
+
+  def deleteSW(ithms: Set[ithmF.IThm]): SW[Unit] = {
+    val ids = ithms.map(_.id)
+    modifySW { active => active.copy (
+      clauses     = active.clauses.filterKeys(ids(_)),
+      units       = active.units.filter { unit => ids(unit.ithm.id) },
+      subsume     = active.subsume.filter(ids(_)),
+      literals    = active.literals.filter    { case (_,ithm) => ids(ithm.id) },
+      equations   = active.equations.filter   { case (_,ithm) => ids(ithm.id) },
+      subterms    = active.subterms.filter    { case (_,ithm) => ids(ithm.id) },
+      allSubterms = active.allSubterms.filter { case (_,ithm) => ids(ithm.id) })
+    }
+  }
+
+  def factor(active: Active,ithms: List[ithmF.IThm]): (Active, List[ithmF.IThm]) = {
+    def fact(ithms: List[ithmF.IThm]): SW[Unit] = {
+      val sortedThms = sortUtilityWise(ithms)
+
+      traverseSimplifies(sortedThms) { ithm =>
+        // Presimplified
+        val sortedThms = sortUtilityWise(ithm::ithmF.factor(ithm))
+        traverseSimplifies(sortedThms) { ithm =>
+          // Post simplified
+          for (
+            _                           <- addFactorSW(ithm) :++> List(ithm);
+            active                      <- getSW;
+            (newRewriter,newRewriteIds) = active.rewriter.reduce;
+            rewritables = findRewritables(active);
+            _ <- // Note: Restore the subsumer
+                 modifySW { active => active.copy(subsume = active.subsume) } *>
+                 deleteSW(rewritables) *>
+                 fact(rewritables.toList))
+          yield ()
+        }
+      }
+    }
+    fact(ithms).written.run(active)
+  }
+
+  //   val (newRewriter,newRewrites) = newSimplifier.rewriter.reduce
+
+  //     // val rewritables = findRewritables(newRewrites)
+  //   val ((newSimp,_),newIthms) = sw.written.run((simp,subsume))
+  //   // (newSimp,newIthms)
+
+  //   //   rewritables ++ factoredThms
+  // }
+
+  def isUnitEql(thm: ithmF.IThm) =
+    ithmF.UnitIThm.getUnit(thm) match {
+      case Some(ithmF.UnitIThm(Literal(true,Eql(_,_)),_)) => true
+      case _                                              => false
+    }
+
+  def sortUtilityWise(thms: List[ithmF.IThm]) =
+    thms.sortWith {
+      case (thm1,thm2) =>
+        thm1.isContradiction ||
+        isUnitEql(thm1) && !thm2.isContradiction ||
+        thm1.clause.lits.size < thm2.clause.lits.size && !thm2.isContradiction &&
+        !isUnitEql(thm2)
+    }
 }

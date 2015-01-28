@@ -7,10 +7,10 @@ import scala.collection.TraversableLike
 import scalaz._
 import Scalaz._
 
-case class WaitingFactory[V:Order,F:Order,P,S,
-  K <: Kernel[V,F,P],
-  ITF <: IThmFactory[V,F,P,S,K]](
-  ithmFactory: ITF,
+case class WaitingFactory[V:Order,F:Order,P,FV,
+  K<:Kernel[V,F,P],
+  ITF<:IThmFactory[V,F,P,FV,K]](
+  ithmF: ITF,
     litOrder: LiteralOrdering[V,F,P],
     interpret: Interpretation[V,F,P])(
   implicit ordFun: Order[Fun[V,F]]) {
@@ -23,14 +23,14 @@ case class WaitingFactory[V:Order,F:Order,P,S,
   private val maxChecks         = Some(20)
 
   class Waiting private (
-    ithms: SortedMap[Weight,List[(Distance,ithmFactory.IThm)]]) {
+    ithms: SortedMap[Weight,List[(Distance,ithmF.IThm)]]) {
     def this() {
       this(SortedMap())
     }
     // DEBUG
     def theIthms = ithms
 
-    def clauseWeight(distance: Double, ithm: ithmFactory.IThm) = {
+    def clauseWeight(distance: Double, ithm: ithmF.IThm) = {
       for (
         score       <- interpret.checkClause(maxChecks,ithm.clause);
         cl          = ithm.clause;
@@ -49,7 +49,7 @@ case class WaitingFactory[V:Order,F:Order,P,S,
 
     def add(
       distance: Double,
-      ithms: List[ithmFactory.IThm],
+      ithms: List[ithmF.IThm],
       noPerturbations: Int) = {
 
       if (ithms.isEmpty)
@@ -61,9 +61,9 @@ case class WaitingFactory[V:Order,F:Order,P,S,
             val perturbClauses =
               clsFrees.traverse[interpret.M,Unit] { case (cl,fvs) =>
                 for (
-                  rv <- interpret.liftRand(interpret.vals.random(fvs));
+                  rv <- interpret.liftRand(interpret.valsF.random(fvs));
                   v  <- interpret.interpretClause(rv,cl);
-                  _  <- if (v) interpret.randomPerturbation(cl,rv)
+                  _  <- if (!v) interpret.randomPerturbation(cl,rv)
                         else ().point[interpret.M])
                 yield ()
               }
@@ -76,7 +76,7 @@ case class WaitingFactory[V:Order,F:Order,P,S,
         val newIthms =
           ithms.foldLeftM[
             interpret.M,
-            SortedMap[Weight,List[(Distance,ithmFactory.IThm)]]](this.ithms) {
+            SortedMap[Weight,List[(Distance,ithmF.IThm)]]](this.ithms) {
             case (ithms_,ithm) =>
               clauseWeight(distance_, ithm) map { w =>
                 val wthms = ithms_.getOrElse(w,List())
@@ -88,12 +88,12 @@ case class WaitingFactory[V:Order,F:Order,P,S,
     }
 
     object EmptyMap {
-      def unapply(map: SortedMap[Weight,List[(Distance,ithmFactory.IThm)]]) =
+      def unapply(map: SortedMap[Weight,List[(Distance,ithmF.IThm)]]) =
         map.isEmpty
     }
 
     object MapCons {
-      def unapply(map: SortedMap[Weight,List[(Distance,ithmFactory.IThm)]]) = {
+      def unapply(map: SortedMap[Weight,List[(Distance,ithmF.IThm)]]) = {
         val (head,rest) = map.splitAt(1)
         head.headOption.map { case h => (h,rest) }
       }

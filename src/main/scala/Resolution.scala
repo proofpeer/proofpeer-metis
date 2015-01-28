@@ -1,57 +1,39 @@
 package proofpeer.metis
 
+import proofpeer.metis.util.{PartialOrder}
 import scala.language.implicitConversions
 import scalaz._
 import Scalaz._
 
-case class Resolution[V:Order,F:Order,P:Order,Id,K<:Kernel[V,F,P]](
+/** The Resolution algorithm, supplied as streams of deduced theorems.
+  *
+  * @tparam V The alphabet from which variable names are drawn
+  * @tparam F The alphabet from which functor names are drawn
+  * @tparam P The alphabet from which predicate names are drawn
+  * @param  seed Seed for randomly generating finite interpretations
+  * @param  initClauses The axioms of the problem to be shown contradictory
+  */
+case class Resolution[V:Order,F:Order,P:Order,FV,K <: Kernel[V,F,P]](
   seed: Long,
   initClauses: List[Clause[V,F,P]],
-  kbo: KnuthBendix[V,F],
-  ithmF: IThmFactory[V,F,P,Id,K])
-  (implicit ordFun: Order[Fun[V,F]]){
+  ithmF: IThmFactory[V,F,P,FV,K],
+  interpret: Interpretation[V,F,P])
+  (implicit ordFun: Order[Fun[V,F]], termOrd: PartialOrder[Term[V,F]]){
 
-  val factor    = new Factor[V,F,P]
-  val vals      = new Valuations[V](FinOrd(8))
-  val interpret = new Interpretation[V,F,P](1000,vals)
-  val activeF   = new ActiveFactory[V,F,P,Id,K,ithmF.type](
+  val activeF = new ActiveFactory[V,F,P,FV,K,ithmF.type](
     ithmF,
-    ithmF.litOrder)
+    ithmF.litOrder,
+    new Subsuming[V,F,P,Int]
+  )
   val active = new activeF.Active
-  val waitingF = new WaitingFactory[V,F,P,Id,K,ithmF.type](
+  val waitingF = new WaitingFactory[V,F,P,FV,K,ithmF.type](
     ithmF,
     ithmF.litOrder,
     interpret)
   val waiting = new waitingF.Waiting
 
-  def zipWith[A,B,C](
-    xs: Stream[A],
-    ys: Stream[B])
-    (f : (A,B) => C): Stream[C] = {
-    xs.zip(ys).map {
-      case (x,y) => f(x,y)
-    }
-  }
-
-  def zipWith3[A,B,C,D](
-    xs: Stream[A],
-    ys: Stream[B],
-    zs: Stream[C])
-    (f : (A,B,C) => D): Stream[D] = {
-    xs.zip(ys).zip(zs).map {
-      case ((x,y),z) => f(x,y,z)
-    }
-  }
-
-  def unzipOption[A,B](xy: Option[(A,B)]): (Option[A],Option[B]) = {
-    xy match {
-      case Some((x,y)) => (Some(x),Some(y))
-      case None        => (None,   None)
-    }
-  }
-
   val initThms = initClauses.map(ithmF.axiom(_))
-  val (initActive,factoredThms) = active.factor(initThms)
+  val (initActive,factoredThms) = activeF.factor(active, initThms)
   val (s,initW) = waiting.add(0,factoredThms,100).run(
     waitingF.interpret.initState(seed))
 
@@ -83,4 +65,30 @@ case class Resolution[V:Order,F:Order,P:Order,Id,K<:Kernel[V,F,P]](
   lazy val dpulled   = wpulled.map(_._2).map(unzipOption(_))
   lazy val distances: Stream[Option[Double]]     = dpulled.map(_._1)
   lazy val pulled:    Stream[Option[ithmF.IThm]] = dpulled.map(_._2)
+
+  def zipWith[A,B,C](
+    xs: Stream[A],
+    ys: Stream[B])
+    (f : (A,B) => C): Stream[C] = {
+    xs.zip(ys).map {
+      case (x,y) => f(x,y)
+    }
+  }
+
+  def zipWith3[A,B,C,D](
+    xs: Stream[A],
+    ys: Stream[B],
+    zs: Stream[C])
+    (f : (A,B,C) => D): Stream[D] = {
+    xs.zip(ys).zip(zs).map {
+      case ((x,y),z) => f(x,y,z)
+    }
+  }
+
+  def unzipOption[A,B](xy: Option[(A,B)]): (Option[A],Option[B]) = {
+    xy match {
+      case Some((x,y)) => (Some(x),Some(y))
+      case None        => (None,   None)
+    }
+  }
 }

@@ -6,8 +6,14 @@ import scala.language.implicitConversions
 import scalaz._
 import Scalaz._
 
-/** Calculation of clause factor substitutions. */
-class Factor[V:Order,F,P] {
+/** Calculation of clause factor substitutions.
+  *
+  * @tparam V The alphabet from which variable names are drawn
+  * @tparam F The alphabet from which functor names are drawn
+  * @tparam P The alphabet from which predicate names are drawn
+  */
+class Factor[V:Order,F,P]
+    extends Function[Clause[V,F,P], Iterator[Subst[V,Term[V,F]]]] {
   private abstract sealed class Edge
   private case class FactorEdge(atm1: Atom[V,F,P], atm2: Atom[V,F,P]) extends Edge
   private case class ReflEdge(tm1: Term[V,F], tm2: Term[V,F]) extends Edge
@@ -120,21 +126,15 @@ class Factor[V:Order,F,P] {
     agenda.map(fact1).sequence.exec(apart,θ).map(_._2)
   }
 
-  /** As factor, but works on an arbitrary set of literals.
-    */
-  def factorLits(lits: Set[Literal[V,F,P]]): Iterator[Subst[V,Term[V,F]]] = {
-    mkEdges(List() ++ lits).flatMap {
-      case (apart,θ,agenda) => fact(apart,θ,agenda)
-    }
-  }
-
   /** Obtain the factorings substitutions of clause cl. Each factoring
       substitution θ is such that cl[θ], after removal of instances of
       reflexivity and removing redundant symmetric equalities, contains
       fewer literals than cl. Moreover, for any such substitution σ,
       cl[σ] is subsumed by cl[θ] for one of the returned substitutions θ.
       */
-  def factor(cl: Clause[V,F,P]): Iterator[Subst[V,Term[V,F]]] = {
-    factorLits(cl.lits)
+  def apply(cl: Clause[V,F,P]): Iterator[Subst[V,Term[V,F]]] = {
+    mkEdges(List() ++ cl.lits).flatMap {
+      case (apart,θ,agenda) => fact(apart,θ,agenda)
+    }
   }
 }

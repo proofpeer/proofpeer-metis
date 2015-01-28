@@ -5,8 +5,9 @@ import scalaz._
 import Scalaz._
 
 /** Substitutions of terms for variables
+  *
   * @tparam V alphabet from which variables are drawn
-  * @tparam T type of terms substituted for
+  * @tparam T type of terms substituted
   */
 case class Subst[V:Order,T] private(θ: V ==>> T) extends PartialFunction[V,T] {
   override def isDefinedAt(v: V) = θ.member(v)
@@ -40,8 +41,14 @@ object Subst {
 }
 
 /** General terms, abstracting over first-order terms and formulas.
-  * @tparam V The alphabet from which variable names are drawn. */
-trait GenTerm[V,T,GT] { this: GT =>
+  *
+  * @tparam V The alphabet from which variable names are drawn.
+  * @tparam T type of terms substituted
+  * @tparam C type of subterm cursors
+  * @tparam GT concrete type
+  * @tparam type of subterms
+  */
+trait GenTerm[V,T,C <: GenCursor[V,T,GT,C],GT] { this: GT =>
   def frees: Set[V]
   def freeIn(v: V): Boolean
   def subst(θ: Subst[V,T]): GT
@@ -52,4 +59,20 @@ trait GenTerm[V,T,GT] { this: GT =>
   def patMatch(θ: Subst[V,T], term: GT): List[Subst[V,T]]
 
   def unify(θ: Subst[V,T], term: GT): List[Subst[V,T]]
+
+  def allSubterms: List[C]
+}
+
+trait GenCursor[V,T,GT,C] { this: C =>
+  /** Substitute across the whole term, preserving the cursor. */
+  def substTop(θ: Subst[V,T]): C
+
+  /** The term under the cursor. */
+  def get: T
+
+  /** The term under the top cursor */
+  def top: GT
+
+  /** Replace the term under the cursor. */
+  def replaceWith(T: T): GT
 }

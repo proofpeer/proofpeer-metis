@@ -19,7 +19,7 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
   case class Refl() extends Inference
   case class Sym() extends Inference
   case class Trans[V,F,P](xy: Thm, yz: Thm) extends Inference
-  case class Rewrite[V,F,P](p: Term.Path, eq:Thm) extends Inference
+  case class Equality[V,F,P](p: List[Int], lit: Literal[V,F,P]) extends Inference
   case class RemoveSym[V,F,P](thm: Thm) extends Inference
   case class Conv[V,F,P](thm: List[Thm]) extends Inference
   case class InfSubst(θ: Subst[V,Term[V,F]], thm: Thm) extends Inference
@@ -29,7 +29,51 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
   case class Thm private[Kernel](clause: Clause[V,F,P], rule: Inference) {
     def isTautology     = clause.isTautology
     def isContradiction = clause.isContradiction
-    def isUnitEql       = clause.isUnitEql
+
+    /**    this
+      *  -------- subst θ
+      *   this[θ]
+      */
+    def subst(θ: Subst[V,Term[V,F]]): Thm =
+      // For now, removing optimisation where, if the entire clause is unchanged, we
+      // do not return a newly constructed clause.
+      Thm(Clause(clause.subst(θ)),InfSubst(θ,this))
+
+    // Derived in Hurd. Primitive here
+    /**      C ∨ ~(x = x)
+      *  ------------------- removeIrrefl
+      *           C
+      */
+    def removeIrrefl: Thm = {
+      val newCl = clause.filter {
+        case IrreflLit(_) => false
+        case _            => true
+      }
+      if (newCl == clause.lits) {
+        this
+      }
+      else new Thm(Clause(newCl), Irreflexive(this))
+    }
+
+    /**  (x = y) ∨ (y = x) ∨ C
+      *  ----------------------- removeSym
+      *            C
+      */
+    def removeSym: Thm = {
+      val newCl = clause.distinctBy {
+          case (Literal(p1,Eql(x1,y1)),Literal(p2,Eql(x2,y2))) =>
+            x1 == y2 && x2 == y1 && p1 == p2
+          case _ => false
+      }
+      if (newCl == clause.lits) {
+        this
+      }
+      else new Thm(Clause(newCl), RemoveSym(this))
+    }
+
+    /** Cursors to the subterms of the largest literals in a theorem. */
+    def largestSubterms(litOrder: LiteralOrdering[V,F,P]) =
+      this.clause.largestSubterms(litOrder).map(new TermCursor(this,_))
   }
 
   /**
@@ -54,8 +98,7 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
     *  ------------------ resolve L, where M is the negation of L.
     *       C ∨ D
     */
-  def resolve(lit: Literal[V,F,P], thm1: Thm, thm2: Thm):
-      Option[Thm] = {
+  def resolve(lit: Literal[V,F,P], thm1: Thm, thm2: Thm): Option[Thm] = {
     val negLit = lit.negate
     // Could push check onto caller for possible optimisation
     if (thm1.clause.contains(lit) && thm2.clause.contains(negLit)) {
@@ -65,14 +108,18 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
     else None
   }
 
-  /**     C
-    *  ------- subst θ
-    *    C[θ]
+  /**
+    *  ------------------ equality L t
+    *  ~(s = t) ∨ ~L ∨ L'
+    *  Where L' is the result of replacing the subterm s under L with t
+    *  Also returns L'.
     */
-  def subst(θ: Subst[V,Term[V,F]], thm: Thm): Thm =
-    // For now, removing optimisation where, if the entire clause is unchanged, we
-    // do not return a newly constructed clause.
-    new Thm(Clause(thm.clause.subst(θ)),InfSubst(θ,thm))
+  def equality(lit: Literal.TermCursor[V,F,P], t: Term[V,F]) = {
+    val s  = lit.get
+    val eq = Literal(false,Eql[V,F,P](s,t))
+    Thm(Clause(Set(eq, lit.top.negate, lit.replaceWith(t))),
+      Equality(lit.path,lit.top))
+  }
 
   // Derived rules in Hurd. Primitive here.
   // ======================================
@@ -83,37 +130,6 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
   def sym(x: Term[V,F], y: Term[V,F]) = {
     val cl = Clause(Set(Literal(false,Eql[V,F,P](x,y)),Literal(true,Eql[V,F,P](y,x))))
     Thm(Clause(cl),Sym())
-  }
-
-  /**      C ∨ ~(x = x)
-    *  ------------------- removeIrrefl
-    *           C
-    */
-  def removeIrrefl(thm: Thm): Thm = {
-    val newCl = thm.clause.filter {
-        case IrreflLit(_) => false
-        case _            => true
-    }
-    if (newCl == thm.clause.lits) {
-      thm
-    }
-    else new Thm(Clause(newCl), Irreflexive(thm))
-  }
-
-  /**  (x = y) ∨ (y = x) ∨ C
-    *  ----------------------- removeSym
-    *            C
-    */
-  def removeSym(thm: Thm): Thm = {
-    val newCl = thm.clause.distinctBy {
-        case (Literal(p1,Eql(x1,y1)),Literal(p2,Eql(x2,y2))) =>
-          x1 == y2 && x2 == y1 && p1 == p2
-        case _ => false
-    }
-    if (newCl == thm.clause.lits) {
-      thm
-    }
-    else new Thm(Clause(newCl), RemoveSym(thm))
   }
 
   private def repeatTopDownConv(
@@ -211,20 +227,16 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
     }.getOrElse((assume(lit),lit))
   }
 
-  case class UnitThm private[Kernel] (lit: Literal[V,F,P], thm: Thm)
+  /** Wrap a clause cursor to a subterm. */
+  class TermCursor private[Kernel](
+    val top: Thm,
+    val clauseCursor: Clause.TermCursor[V,F,P]) {
 
-  def substUnit(θ: Subst[V,Term[V,F]], unit: UnitThm) = {
-    val newThm = subst(θ, unit.thm)
-    UnitThm(unit.thm.clause.head, newThm)
-  }
-
-  /** Destruct a clause of exactly only literal. */
-  object UnitThm {
-    def unapply(thm: Thm): Option[UnitThm] = {
-      thm.clause match {
-        case UnitClause(lit) => Some(UnitThm(lit,thm))
-        case _               => None
-      }
+    def get = clauseCursor.get
+    def literal = clauseCursor.literal
+    def substTop(θ: Subst[V,Term[V,F]]) = {
+      val cursor_ = clauseCursor.substTop(θ)
+      new TermCursor(Thm(cursor_.top,InfSubst(θ,top)),cursor_)
     }
   }
 }

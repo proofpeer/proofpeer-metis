@@ -6,10 +6,17 @@ import scalaz._
 import Scalaz._
 import util.Fun._
 
-/** Finite/random interpretations of clauses. */
+/** Finite/random interpretations of clauses.
+  *
+  * @tparam V The alphabet from which variable names are drawn
+  * @tparam F The alphabet from which functor names are drawn
+  * @tparam P The alphabet from which predicate names are drawn
+  * @param  maxImages The maximum number of concrete tuples for which to generate
+  *         interpretations for each predicate/function
+*/
 case class Interpretation[V,F,P](
-  maxVals: Int,
-  vals: Valuations[V]) {
+  maxImages: Int,
+  valsF: Valuations[V]) {
   def safeExp(x:Int,n:Int) =
     if (n == 0)
       Some(1)
@@ -23,25 +30,28 @@ case class Interpretation[V,F,P](
     }
 
   val maxArgs = {
-    val b = vals.fin.size.toLong
+    val b = valsF.fin.size.toLong
+    var max = 0
     var acc = b
-    while (acc < Integer.MAX_VALUE)
+    while (acc < Integer.MAX_VALUE && acc < maxImages) {
+      max = max + 1
       acc = acc * b
-    acc
+    }
+    max
   }
 
   case class S(seed:Long,fis:FunctorInterpretations,pis:PredicateInterpretations)
   type M[A] = State[S,A]
 
-  type FunctorInterpretations   = RInterpretation[F,vals.fin.Fin]
+  type FunctorInterpretations   = RInterpretation[F,valsF.fin.Fin]
   type PredicateInterpretations = RInterpretation[P,Boolean]
 
-  case class ListMapping[Cod] (m: Map[vals.fin.ListFin,Cod]) {
-    def +(argsImg: Tuple2[vals.fin.ListFin, Cod]) = {
+  case class ListMapping[Cod] (m: Map[valsF.fin.ListFin,Cod]) {
+    def +(argsImg: Tuple2[valsF.fin.ListFin, Cod]) = {
       val (args,img) = argsImg
       ListMapping(m + (args → img))
     }
-    def img(args: vals.fin.ListFin, default: M[Cod]):
+    def img(args: valsF.fin.ListFin, default: M[Cod]):
         M[(ListMapping[Cod],Cod)] = {
       m.get(args) match {
         case None =>
@@ -57,14 +67,14 @@ case class Interpretation[V,F,P](
   }
 
   case class RInterpretation[F,Cod] (m: Map[(F,Int),ListMapping[Cod]]) {
-    def interpret(f:F, args:vals.fin.ListFin, default: M[Cod]):
+    def interpret(f:F, args:valsF.fin.ListFin, default: M[Cod]):
         M[(RInterpretation[F,Cod], Cod)] = {
       val nargs   = args.ns.length
       val mapping = m.getOrElse((f,nargs),ListMapping.empty)
       mapping.img(args,default) map { case (i,y) =>
         (RInterpretation(m + { (f,nargs) → i }), y) }
     }
-    def reinterpret(f:F, args:vals.fin.ListFin, img: Cod): RInterpretation[F,Cod] = {
+    def reinterpret(f:F, args:valsF.fin.ListFin, img: Cod): RInterpretation[F,Cod] = {
       val nargs   = args.ns.length
       val mapping = m.getOrElse((f,nargs),ListMapping.empty)
       RInterpretation(m + { (f,nargs) → (mapping + { args → img }) })
@@ -85,16 +95,16 @@ case class Interpretation[V,F,P](
       _         <- put(S(seed2,s.fis,s.pis)))
     yield x
 
-  def interpretFunction(f:F, args:vals.fin.ListFin): M[vals.fin.Fin] = {
+  def interpretFunction(f:F, args:valsF.fin.ListFin): M[valsF.fin.Fin] = {
     for (
       s           <- get[S];
-      newFI_value <- s.fis.interpret(f,args,liftRand(vals.fin.random));
+      newFI_value <- s.fis.interpret(f,args,liftRand(valsF.fin.random));
       s_          <- get[S];
       _           <- put(S(s_.seed,newFI_value._1,s_.pis)))
     yield newFI_value._2
   }
 
-  def interpretPredicate(p:P, args:vals.fin.ListFin): M[Boolean] = {
+  def interpretPredicate(p:P, args:valsF.fin.ListFin): M[Boolean] = {
     for (
       s           <- get[S];
       newPI_value <- s.pis.interpret(p,args,liftRand(MetisRNG.nextBoolean));
@@ -103,7 +113,7 @@ case class Interpretation[V,F,P](
     yield newPI_value._2
   }
 
-  def reinterpretFunction(f:F, args:vals.fin.ListFin, img:vals.fin.Fin): M[Unit] = {
+  def reinterpretFunction(f:F, args:valsF.fin.ListFin, img:valsF.fin.Fin): M[Unit] = {
     for (
       s     <- get[S];
       newFI = s.fis.reinterpret(f,args,img);
@@ -112,7 +122,7 @@ case class Interpretation[V,F,P](
     yield ()
   }
 
-  def reinterpretPredicate(p:P, args:vals.fin.ListFin, img:Boolean): M[Unit] = {
+  def reinterpretPredicate(p:P, args:valsF.fin.ListFin, img:Boolean): M[Unit] = {
     for (
       s     <- get[S];
       newPI = s.pis.reinterpret(p,args,img);
@@ -121,7 +131,7 @@ case class Interpretation[V,F,P](
     yield ()
   }
 
-  def interpretTerm(vl: vals.Valuation, t: Term[V,F]): M[vals.fin.Fin] = {
+  def interpretTerm(vl: valsF.Valuation, t: Term[V,F]): M[valsF.fin.Fin] = {
     t match {
       case Var(v)      => (vl.get(v).get).point[M]
       case Fun(f,args) =>
@@ -129,17 +139,17 @@ case class Interpretation[V,F,P](
         if (nargs < maxArgs)
           for (
             vargs <- args.traverse(interpretTerm(vl,_));
-            y     <- interpretFunction(f,vals.fin.ListFin(vargs))
+            y     <- interpretFunction(f,valsF.fin.ListFin(vargs))
           )
           yield y
         else {
-          for (n <- liftRand(vals.fin.random))
+          for (n <- liftRand(valsF.fin.random))
           yield n
         }
     }
   }
 
-  def interpretAtom(vl: vals.Valuation, atm: Atom[V,F,P]): M[Boolean] = {
+  def interpretAtom(vl: valsF.Valuation, atm: Atom[V,F,P]): M[Boolean] = {
     atm match {
       case Eql(x,y) => (interpretTerm(vl,x) |@| interpretTerm(vl,y))(_ == _)
       case Pred(p,args) =>
@@ -147,7 +157,7 @@ case class Interpretation[V,F,P](
         if (nargs < maxArgs)
           for (
             vargs <- args.traverse(interpretTerm(vl,_));
-            y     <- interpretPredicate(p,vals.fin.ListFin(vargs))
+            y     <- interpretPredicate(p,valsF.fin.ListFin(vargs))
           )
           yield y
         else {
@@ -157,16 +167,16 @@ case class Interpretation[V,F,P](
     }
   }
 
-  def interpretLiteral(vl: vals.Valuation, lit: Literal[V,F,P]): M[Boolean] = {
+  def interpretLiteral(vl: valsF.Valuation, lit: Literal[V,F,P]): M[Boolean] = {
     interpretAtom(vl,lit.atom) map (_ == lit.isPositive)
   }
 
-  def interpretClause(vl: vals.Valuation, cl: Clause[V,F,P]) = {
+  def interpretClause(vl: valsF.Valuation, cl: Clause[V,F,P]) = {
     existsM(cl.lits.iterator)(interpretLiteral(vl,_))
   }
 
   def checkClause(maxChecks: Option[Int], cl: Clause[V,F,P]) = {
-    def score(vl: vals.Valuation, m: Map[Boolean,Int]) = {
+    def score(vl: valsF.Valuation, m: Map[Boolean,Int]) = {
       interpretClause(vl, cl) map {
         b => if (b)
           m + { true → (m(true) + 1) }
@@ -183,14 +193,14 @@ case class Interpretation[V,F,P](
       false → 0
     )
     val suggestedChecks = maxChecks.map { n =>
-      safeExp(vals.fin.size,fvs.size).filter { _ <= n }.getOrElse(n)
+      safeExp(valsF.fin.size,fvs.size).filter { _ <= n }.getOrElse(n)
     }
     suggestedChecks match  {
-      case None => vals.foldValuations(fvs, empty.point[M]) {
+      case None => valsF.foldValuations(fvs, empty.point[M]) {
         case (mm,vl) => mm >>= (score(vl,_))
       }
       case Some(chks) => iterateM[M,Map[Boolean,Int]](chks,empty) {
-        m => liftRand(vals.random(fvs)) >>= (score(_,m))
+        m => liftRand(valsF.random(fvs)) >>= (score(_,m))
       }
     }
   }
@@ -206,52 +216,52 @@ case class Interpretation[V,F,P](
     f(List(), xs, List())
   }
 
-  def valueModelTerm(term: Term[vals.fin.Fin,(F,vals.fin.Fin)]) = {
+  def valueModelTerm(term: Term[valsF.fin.Fin,(F,valsF.fin.Fin)]) = {
     term match {
       case Var(n)       => n
       case Fun((_,n),_) => n
     }
   }
 
-  import vals.fin.ordFin
-  def toModelTerm(term: Term[V,F], vl: vals.Valuation):
-      M[Term[vals.fin.Fin,(F,vals.fin.Fin)]] = {
+  import valsF.fin.ordFin
+  def toModelTerm(term: Term[V,F], vl: valsF.Valuation):
+      M[Term[valsF.fin.Fin,(F,valsF.fin.Fin)]] = {
     term match {
       case Var(v)      =>
-        val theV = Var[vals.fin.Fin,(F,vals.fin.Fin)](vl.get(v).get):
-            Term[vals.fin.Fin,(F,vals.fin.Fin)]
+        val theV = Var[valsF.fin.Fin,(F,valsF.fin.Fin)](vl.get(v).get):
+            Term[valsF.fin.Fin,(F,valsF.fin.Fin)]
         theV.point[M]
       case Fun(f,args) =>
         val argVals = args.traverseU(toModelTerm(_,vl))
         for (
           avs <- argVals;
-          img <- interpretFunction(f,vals.fin.ListFin(avs.map(valueModelTerm(_)))))
+          img <- interpretFunction(f,valsF.fin.ListFin(avs.map(valueModelTerm(_)))))
         yield Fun((f,img),avs)
     }
   }
 
   sealed trait Perturbation
-  case class PerturbFunction(f:F,args:List[vals.fin.Fin],img:vals.fin.Fin)
+  case class PerturbFunction(f:F,args:List[valsF.fin.Fin],img:valsF.fin.Fin)
       extends Perturbation
-  case class PerturbPredicate(p:P,args:List[vals.fin.Fin],img:Boolean)
+  case class PerturbPredicate(p:P,args:List[valsF.fin.Fin],img:Boolean)
       extends Perturbation
 
   def perturbTerm(
-    term: Term[vals.fin.Fin,(F,vals.fin.Fin)],
-    targets: List[vals.fin.Fin]): M[List[Perturbation]] = {
+    term: Term[valsF.fin.Fin,(F,valsF.fin.Fin)],
+    targets: List[valsF.fin.Fin]): M[List[Perturbation]] = {
     term match {
       case Var(_) => List[Perturbation]().point[M]
       case Fun((f,_),args) =>
         val argVals = args.map(valueModelTerm)
         splits(argVals).reverse.zip(args).traverseM {
           case ((pre,v,suf),arg) =>
-            val vs = vals.fin.filterM[M] { v_ =>
+            val vs = valsF.fin.filterM[M] { v_ =>
               if (v == v_)
                 false.point[M]
               else
                 interpretFunction(
                   f,
-                  vals.fin.ListFin(pre.reverse:::(v_ :: suf))).
+                  valsF.fin.ListFin(pre.reverse:::(v_ :: suf))).
                   map { fv => targets.contains(fv) }
             }
             vs >>= (perturbTerm(arg,_))
@@ -261,15 +271,15 @@ case class Interpretation[V,F,P](
     }
   }
 
-  def perturbLiteral(lit: Literal[V,F,P], valuation: vals.Valuation) = {
+  def perturbLiteral(lit: Literal[V,F,P], valuation: valsF.Valuation) = {
     lit match {
       case Literal(isPositive,Eql(x,y)) =>
         for (
           mx     <- toModelTerm(x,valuation);
           my     <- toModelTerm(y,valuation);
-          perts  <- perturbTerm(mx, vals.fin.filter { _ => true }.toList);
+          perts  <- perturbTerm(mx, valsF.fin.filter { _ => true }.toList);
           xv = valueModelTerm(mx);
-          perts_ <- perturbTerm(my, vals.fin.filter (xv == _ == isPositive).toList))
+          perts_ <- perturbTerm(my, valsF.fin.filter (xv == _ == isPositive).toList))
         yield perts ++ perts_
       case Literal(isPositive,Pred(p,args)) =>
         for (
@@ -277,13 +287,13 @@ case class Interpretation[V,F,P](
           argVals = margs.map(valueModelTerm);
           perts   <- splits(argVals).reverse.zip(margs).traverseM {
             case ((pre,v,suf),arg) =>
-              val vs = vals.fin.filterM[M] { v_ =>
+              val vs = valsF.fin.filterM[M] { v_ =>
                 if (v == v_)
                   false.point[M]
                 else
                   interpretPredicate(
                     p,
-                    vals.fin.ListFin(pre.reverse:::(v_ :: suf))).
+                    valsF.fin.ListFin(pre.reverse:::(v_ :: suf))).
                     map { pv => pv == isPositive }
               }
               vs >>= (perturbTerm(arg,_))
@@ -294,18 +304,18 @@ case class Interpretation[V,F,P](
     }
   }
 
-  def perturbClause(cl: Clause[V,F,P], valuation: vals.Valuation) =
+  def perturbClause(cl: Clause[V,F,P], valuation: valsF.Valuation) =
     cl.lits.toList.traverseM[M,Perturbation](perturbLiteral(_,valuation))
 
   def applyPerturbation(pert: Perturbation): M[Unit] =
     pert match {
       case PerturbFunction(f,args,img) =>
-        reinterpretFunction(f,vals.fin.ListFin(args),img)
+        reinterpretFunction(f,valsF.fin.ListFin(args),img)
       case PerturbPredicate(p,args,img) =>
-        reinterpretPredicate(p,vals.fin.ListFin(args),img)
+        reinterpretPredicate(p,valsF.fin.ListFin(args),img)
     }
 
-  def randomPerturbation(cl: Clause[V,F,P], valuation: vals.Valuation): M[Unit] =
+  def randomPerturbation(cl: Clause[V,F,P], valuation: valsF.Valuation): M[Unit] =
     perturbClause(cl, valuation) >>= { ps =>
       if (!ps.isEmpty) {
         for (

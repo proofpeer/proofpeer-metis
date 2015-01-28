@@ -1,19 +1,42 @@
 package proofpeer.metis
 
+import proofpeer.metis.util.{PartialOrder}
 import scala.collection.immutable._
 import scala.language.implicitConversions
 import scalaz._
 import Scalaz._
 
+object Literal {
+  sealed class TermCursor[V:Order,F,P] private[Literal] (
+    val top: Literal[V,F,P],
+    private[Literal] val cursor: Atom.TermCursor[V,F,P])
+      extends GenCursor[V,Term[V,F],Literal[V,F,P],TermCursor[V,F,P]] {
+
+    /** Argument path from theTop to the cursor. */
+    def path = cursor.path
+    override def get = cursor.get
+
+    override def replaceWith(replacement: Term[V,F]): Literal[V,F,P] =
+      new Literal(top.isPositive,cursor.replaceWith(replacement))
+
+    override def substTop(θ: Subst[V,Term[V,F]]) = {
+      val cursor_ = cursor.substTop(θ)
+      val lit_    = Literal(top.isPositive,cursor_.top)
+      new TermCursor(lit_,cursor_)
+    }
+  }
+}
+
 /** Literals: atomic formulas and their negations.
-  * @param isPositive Is this a non-negated atomic formula?
   *
   * @tparam V The alphabet from which variable names are drawn
   * @tparam F The alphabet from which functor names are drawn
   * @tparam P The alphabet from which predicate names are drawn
+  *
+  * @param isPositive Is this a non-negated atomic formula?
   */
 case class Literal[V:Order,F,P](isPositive: Boolean, atom: Atom[V,F,P])
-    extends GenTerm[V,Term[V,F],Literal[V,F,P]] {
+    extends GenTerm[V,Term[V,F],Literal.TermCursor[V,F,P],Literal[V,F,P]] {
   def negate() = Literal(!this.isPositive, this.atom)
 
   override def frees = atom.frees
@@ -29,18 +52,28 @@ case class Literal[V:Order,F,P](isPositive: Boolean, atom: Atom[V,F,P])
     else List()
   override def heuristicSize = atom.heuristicSize
 
+  override def allSubterms =
+    atom.allSubterms.map { new Literal.TermCursor(this,_) }
+
+  /** Is this literal of the form x=x? */
   def isRefl = isPositive && atom.isRefl
 }
 
-class LiteralOrdering[V:Order,F,P](kbo: KnuthBendix[V,F], predicateFunctor: P=>F) {
-  def atomToTerms(atm: Atom[V,F,P]) =
+trait LiteralOrdering[V,F,P] {
+  /** isLargerLiteral(lits)(lit) returns true iff lit is maximal in {lit} ∪ lits. */
+  def isMaximal(lits: Set[Literal[V,F,P]]): Literal[V,F,P] => Boolean
+}
+
+class MetisLiteralOrdering[V:Order,F](termOrd: PartialOrder[Term[V,F]])
+    extends LiteralOrdering[V,F,F] {
+  def atomToTerms(atm: Atom[V,F,F]) =
     atm match {
-      case Pred(p,args) => List(Fun(predicateFunctor(p),args))
+      case Pred(p,args) => List(Fun(p,args))
       case Eql(l,r)     => List(l,r)
     }
 
   def strictyLess(tm1: Term[V,F], tm2: Term[V,F]) =
-    kbo.tryCompare(tm1,tm2).map { _ == Ordering.LT }.getOrElse(false)
+    termOrd.tryCompare(tm1,tm2).map { _ == Ordering.LT }.getOrElse(false)
 
   def notStrictlyLess(tms1: List[Term[V,F]], tms2: List[Term[V,F]]) = {
     !tms1.forall { tm1 =>
@@ -50,7 +83,7 @@ class LiteralOrdering[V:Order,F,P](kbo: KnuthBendix[V,F], predicateFunctor: P=>F
     }
   }
 
-  def isLargerLiteral(lits: Set[Literal[V,F,P]]): Literal[V,F,P] => Boolean = {
+  override def isMaximal(lits: Set[Literal[V,F,F]]): Literal[V,F,F] => Boolean = {
     if (lits.isEmpty)
       _ => true
     else {

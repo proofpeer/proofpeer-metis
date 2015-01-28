@@ -7,7 +7,7 @@ import scalaz._
 import Scalaz._
 
 // TODO: A is currently unused. Provided in Metis for extra filtering.
-class Subsumer[V:Order,F,P,A] {
+class Subsuming[V:Order, F, P, A] {
   type Id   = Int
   type Size = Int
   private case class NonUnit (
@@ -61,7 +61,7 @@ class Subsumer[V:Order,F,P,A] {
 
   // We don't really need to store the clause in the literal net. Used
   // with A for additional filtering in METIS.
-  class Subsume private[Subsumer] (
+  class Subsume private[Subsuming] (
     containsEmpty: Boolean,
     units:         LiteralNet[F,P,(Literal[V,F,P],Clause[V,F,P],A)],
     nonunits:      NonUnit) {

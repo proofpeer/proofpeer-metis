@@ -1,16 +1,52 @@
 package proofpeer.metis
 
+import proofpeer.metis.util.{PartialOrder}
 import scala.collection.immutable._
 import scala.language.implicitConversions
 import scalaz._
 import Scalaz._
+
+object Term {
+  sealed class TermCursor[V:Order,F] private[Term] (
+    val top: Term[V,F],
+    private[Term] val cursorTerm: Term[V,F],
+    /** Argument path from theTop to the cursor. */
+    val path: List[Int]) extends GenCursor[V,Term[V,F],Term[V,F],TermCursor[V,F]] {
+
+    override def get = cursorTerm
+
+    private def replaceAt(
+      term: Term[V,F],
+      replacement: Term[V,F],
+      path: List[Int]): Term[V,F] = {
+      (term,path) match {
+        case (_,List())           => replacement
+        case (Fun(f,args), n::ns) =>
+          args.splitAt(n) match {
+            case (pre,arg::sucs) => Fun(f,pre ++ (replaceAt(term,arg,ns)::sucs))
+            case _               =>
+              throw new Error("Bug: No such subterm.")
+          }
+        case _ => throw new Error("Bug: No such subterm.")
+      }
+    }
+
+    override def replaceWith(replacement: Term[V,F]): Term[V,F] =
+      replaceAt(this.top,replacement,this.path)
+
+    override def substTop(θ: Subst[V,Term[V,F]]) =
+      new TermCursor(top.subst(θ),cursorTerm.subst(θ),path)
+  }
+}
 
 /** Terms as in first-order logic; i.e. the structured elements that are arguments to
   * predicates and that appear on the left- and right-hand sides of equations.
   * @tparam V The alphabet from which variable names are drawn
   * @tparam F The alphabet from which functor names are drawn
   */
-abstract sealed class Term[V:Order,F] extends GenTerm[V,Term[V,F],Term[V,F]] {
+abstract sealed class Term[V:Order,F]
+    extends GenTerm[V,Term[V,F],Term.TermCursor[V,F],Term[V,F]] {
+
   override def freeIn(v: V): Boolean = {
     this match {
       case Var(v_) => v == v_
@@ -102,22 +138,13 @@ abstract sealed class Term[V:Order,F] extends GenTerm[V,Term[V,F],Term[V,F]] {
     }
   }
 
-  def subtermAt(path: Term.Path): Term[V,F] = {
-    (this,path) match {
-      case (_, List())          => this
-      case (Fun(_,args), n::ns) => args(n).subtermAt(ns)
-      case (Var(_), _::_)       =>
-        throw new IllegalArgumentException("No such subterm.")
-    }
-  }
-
-  def allSubterms: List[(Term.Path,Term[V,F])] = {
-    (List(),this) :: (this match {
+  override def allSubterms: List[Term.TermCursor[V,F]] = {
+    new Term.TermCursor(this,this,List()) :: (this match {
       case Fun(_,args) =>
         for (
-          (arg,i)           <- args.zipWithIndex;
-          (path,argSubterm) <- arg.allSubterms)
-        yield (i::path, argSubterm)
+          (arg,i) <- args.zipWithIndex;
+          cursor  <- arg.allSubterms)
+        yield new Term.TermCursor(this,arg,i::cursor.path)
       case _           => List()
     })
   }
@@ -138,10 +165,6 @@ object TermInstances {
             (args1.length,f1,args1) ?|? (args2.length,f2,args2)
         }
     }
-}
-
-object Term {
-  type Path = List[Int]
 }
 
 case class Weight[V] private (nameMap : Map[V,Int], c: Int) {
@@ -197,7 +220,7 @@ object Weight {
   * function in METIS.
   */
 class KnuthBendix[V:Order,F:Order](funWeight: (F,Int) => Int)(
-  implicit ordFun: Order[Fun[V,F]]) {
+  implicit ordFun: Order[Fun[V,F]]) extends PartialOrder[Term[V,F]] {
 
   /** Add weight to a term, so that it can be compared. */
   private case class WTerm(tm:Term[V,F]) {
@@ -267,8 +290,8 @@ class KnuthBendix[V:Order,F:Order](funWeight: (F,Int) => Int)(
         weightCmp(this.tm,otherTm.tm)
     }
   }
-  def tryCompare(tm1: Term[V,F], tm2: Term[V,F]) =
-      WTerm(tm1).kbOrder(WTerm(tm2))
+  override def tryCompare(tm1: Term[V,F], tm2: Term[V,F]) =
+    WTerm(tm1).kbOrder(WTerm(tm2))
 }
 
 object KnuthBendix {

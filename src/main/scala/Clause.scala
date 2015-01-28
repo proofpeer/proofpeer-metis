@@ -9,10 +9,51 @@ import TermInstances._
 import util._
 import RichCollectionInstances._
 
+object Clause {
+  sealed class TermCursor[V:Order,F:Order,P:Order](
+    val top: Clause[V,F,P],
+    private val pos:    Int,
+    val literalCursor: Literal.TermCursor[V,F,P])
+      extends GenCursor[V,Term[V,F],Clause[V,F,P],TermCursor[V,F,P]] {
+
+    override def get = literalCursor.get
+
+    override def replaceWith(subterm: Term[V,F]): Clause[V,F,P] = {
+      top.lits.toList.splitAt(pos) match {
+        case (pre,arg::sucs) =>
+          Clause((pre ++ (literalCursor.replaceWith(subterm)::sucs)).toSet)
+        case _ => throw new Error("Bug: No such literal.")
+      }
+    }
+
+    /** The literal containing the subterm. */
+    def literal = top.lits.toList.splitAt(pos) match {
+      case (_,arg::_) => arg
+      case _          => throw new Error("Bug: No such literal.")
+    }
+
+    def substTop(θ: Subst[V,Term[V,F]]) = {
+      val cursor_ = literalCursor.substTop(θ)
+      val lit_    = cursor_.top
+      top.lits.toList.splitAt(pos) match {
+        case (pre,_::sucs) =>
+          val cl = Clause((pre ++ (lit_ :: sucs)).toSet)
+          new TermCursor(cl,pos,cursor_)
+        case _ => throw new Error("Bug: No such subterm.")
+      }
+    }
+  }
+}
+
 /** Clauses, implicitly a set of literals, of which the clause is their
-    disjunction. Two clauses are equal when their set of literals is equal. */
+  * disjunction. Two clauses are equal when their set of literals is equal.
+  *
+  * @tparam V The alphabet from which variable names are drawn
+  * @tparam F The alphabet from which functor names are drawn
+  * @tparam P The alphabet from which predicate names are drawn
+  */
 case class Clause[V:Order,F:Order,P:Order](lits: Set[Literal[V,F,P]])
-    extends GenTerm[V,Term[V,F],Clause[V,F,P]] {
+    extends GenTerm[V,Term[V,F],Clause.TermCursor[V,F,P],Clause[V,F,P]] {
 
   import LiteralInstances._
   import AtomInstances._
@@ -44,6 +85,12 @@ case class Clause[V:Order,F:Order,P:Order](lits: Set[Literal[V,F,P]])
   }
   override def heuristicSize = lits.toList.map(_.heuristicSize).sum
 
+  override def allSubterms =
+    for (
+      (lit,n) <- lits.toList.zipWithIndex;
+      cursor  <- lit.allSubterms)
+    yield new Clause.TermCursor(this,n,cursor)
+
   implicit val atomOrder = Order[Atom[V,F,P]].toScalaOrdering
 
   def isTautology: Boolean = {
@@ -64,23 +111,16 @@ case class Clause[V:Order,F:Order,P:Order](lits: Set[Literal[V,F,P]])
 
   def isContradiction = lits.isEmpty
 
-  def largestLiterals(litOrder: LiteralOrdering[V,F,P]) = {
-    lits.filter(litOrder.isLargerLiteral(this.lits)(_))
+  def largestLiterals(litOrder: LiteralOrdering[V,F,P]) =
+    lits.filter(litOrder.isMaximal(this.lits)(_))
+
+  def largestSubterms(litOrder: LiteralOrdering[V,F,P]) = {
+    for (
+      (lit,n) <- lits.zipWithIndex;
+      if litOrder.isMaximal(this.lits)(lit);
+      cursor  <- lit.allSubterms)
+    yield new Clause.TermCursor(this,n,cursor)
   }
-
-  /** Is this a clause of exactly one literal? (a trivial disjunction) */
-  def isUnit =
-    this match {
-      case UnitClause(_) => true
-      case _             => false
-    }
-
-  /** Is this a clause of exactly one equation? */
-  def isUnitEql =
-    this match {
-      case UnitClause(Literal(p,Eql(_,_))) => p
-      case _                               => false
-    }
 }
 
 object ClauseInstances {
@@ -89,18 +129,6 @@ object ClauseInstances {
   implicit def toSet[V,F,P](cl: Clause[V,F,P]) = cl.lits
 }
 
-
-/** Destruct a clause of exactly only literal. */
-object UnitClause {
-  def unapply[V,F,P](cl: Clause[V,F,P]): Option[Literal[V,F,P]] = {
-    val (unit,rest) = cl.lits.toIterable.splitAt(1)
-    unit.toList match {
-      case List()                  => None
-      case unit::_ if rest.isEmpty => Some(unit)
-      case _                       => None
-    }
-  }
-}
 
 /** Destruct a clause of the form ¬(x=x) */
 object IrreflLit {
