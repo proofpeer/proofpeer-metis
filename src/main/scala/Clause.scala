@@ -124,8 +124,8 @@ case class Clause[V:Order,F:Order,P:Order](lits: Set[Literal[V,F,P]])
 }
 
 object ClauseInstances {
-  implicit def toRichCollection[V,F,P](cl: Clause[V,F,P]) =
-    new RichCollection(cl.lits)
+  implicit def toRicIterable[V,F,P](cl: Clause[V,F,P]) =
+    new RichIterable(cl.lits)
   implicit def toSet[V,F,P](cl: Clause[V,F,P]) = cl.lits
 }
 
