@@ -99,10 +99,14 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
     *       C ∨ D
     */
   def resolve(lit: Literal[V,F,P], thm1: Thm, thm2: Thm): Option[Thm] = {
+   // System.out.println("Resolve on:" + Debug.stringClause(Set(lit)))
+   // System.out.println("Res1: " + Debug.stringClause(thm1.clause.lits))
+   // System.out.println("Res2: " + Debug.stringClause(thm2.clause.lits))
     val negLit = lit.negate
     // Could push check onto caller for possible optimisation
     if (thm1.clause.contains(lit) && thm2.clause.contains(negLit)) {
       val cl = (thm1.clause - lit) ++ (thm2.clause - negLit)
+     // System.out.println("Resolvent: " + Debug.stringClause(cl))
       Some(Thm(Clause(cl), Resolve(thm1,thm2)))
     }
     else None

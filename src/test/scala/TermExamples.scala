@@ -44,7 +44,7 @@ class TermSpec extends FlatSpec {
     }.head
     net.insert(lhs, { tm =>
       lhs.patMatch(Subst.empty, tm).headOption.map { θ =>
-        (rhs.subst(θ),kernel.subst(θ,eq)) }
+        (rhs.subst(θ),eq.subst(θ)) }
     })
   }
 

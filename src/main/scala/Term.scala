@@ -300,7 +300,7 @@ object KnuthBendix {
     new KnuthBendix[V,F]( { case (_,_) => 1 } )
   }
 
-  def precendenceOrder[V,F:Order] = new Order[Fun[V,F]] {
+  def precedenceOrder[V,F:Order] = new Order[Fun[V,F]] {
     def order(f: Fun[V,F], g: Fun[V,F]) = {
       (f.args.length,f.f) ?|? (g.args.length,g.f)
     }

@@ -29,7 +29,7 @@ case class IThmFactory[V:Order,F:Order,P:Order,FV,K<:Kernel[V,F,P]](
 
   /** Theorems with identifiers. All instance methods return new theorems but
       preserve the id. */
-  case class IThm private[IThmFactory] (val id: Int, thm: kernel.Thm) {
+  case class IThm private[IThmFactory] (id: Int, thm: kernel.Thm) {
     val clause = thm.clause
     val rule   = thm.rule
     def isTautology     = thm.isTautology
@@ -113,11 +113,9 @@ case class IThmFactory[V:Order,F:Order,P:Order,FV,K<:Kernel[V,F,P]](
             (true,kernel.resolve(lit,thm,convThm).
               getOrBug("Conversions should never fail."))
       }
-
       if (changed)
-        Some(new IThm(this.id,newThm))
-      else
-        None
+        Some(IThm(id,newThm))
+      else None
     }
   }
 

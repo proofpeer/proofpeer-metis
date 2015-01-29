@@ -48,9 +48,9 @@ class TermParsers extends StandardTokenParsers {
 
   val parseAtom:Parser[StringAtom] = {
     (for {
-      lhs <- parseTerm
+      lhs <- parseMaybeBracketed(parseTerm)
       _   <- ("=":Parser[String])
-      rhs <- parseTerm
+      rhs <- parseMaybeBracketed(parseTerm)
     }
     yield Eql[String,String,String](lhs,rhs)) |
     (for {
@@ -60,8 +60,12 @@ class TermParsers extends StandardTokenParsers {
     yield Pred(id,args))
   }
 
+  def parseMaybeBracketed[A](parser: Parser[A]):Parser[A] = {
+    ("(" ~> parseMaybeBracketed(parser) <~ ")") | parser
+  }
+
   val parseLit:Parser[StringLit] = {
-    ("~" ~> parseAtom).map { atm => Literal(false,atm) } |
-    parseAtom.map { atm => Literal(true,atm) }
+    ("~" ~> parseMaybeBracketed(parseAtom)).map { atm => Literal(false,atm) } |
+    parseMaybeBracketed(parseAtom).map { atm => Literal(true,atm) }
   }
 }

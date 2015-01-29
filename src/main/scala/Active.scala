@@ -75,7 +75,7 @@ case class ActiveFactory[
       }
 
       Active(
-        clauses,
+        clauses + (ithm.id → ithm),
         rewriter,
         units,
         this.subsume.insert(ithm.clause, ithm.id),
@@ -132,38 +132,37 @@ case class ActiveFactory[
 
     def rewrite(ithm: ithmF.IThm) = {
       val conv  = rewriter.rewr(ithm.id);
-      ithm.repeatTopDownConvRule(conv);
+      ithm.repeatTopDownConvRule(conv)
     }
 
     def simplify(ithm: ithmF.IThm) =
       for (
         simped    <- ithm.simplify;
-        rewritten <- rewrite(simped);
-        ithm_     = resolveUnits(rewritten);
-        if !subsume.isStrictlySubsumed(ithm_.clause)
+        rewritten = (rewrite(simped) >>= (_.simplify)).getOrElse(simped);
+        resolved  = resolveUnits(rewritten);
+        if !subsume.isStrictlySubsumed(resolved.clause)
       )
-      yield ithm_
+      yield resolved
+  }
 
-    def add(ithm: ithmF.IThm):(Active,List[ithmF.IThm]) = {
-      val simpedThm = simplify(ithm) match {
-        case None                             =>
-          return (this,List())
-        case Some(ithm) if ithm.isContradiction =>
-          return (this,List(ithm))
-        case Some(ithm) => ithm
-      }
-
-      val deductions =
-        if (simpedThm == ithm) {
-          val active   = addClause(ithm)
-          val freshThm = ithm.freshen
-            active.deduceResolutions(freshThm) ++
-          deduceParamodulations(freshThm)
-        }
-        else List(simpedThm)
-
-      return null
+  def add(active: Active, ithm: ithmF.IThm):(Active,List[ithmF.IThm]) = {
+    val simpedThm = active.simplify(ithm) match {
+      case None                             =>
+        return (active,List())
+      case Some(ithm) if ithm.isContradiction =>
+        return (active,List(ithm))
+      case Some(ithm) => ithm
     }
+    val (active_,deductions) =
+        if (simpedThm == ithm) {
+          val active_  = active.addClause(ithm)
+          val freshThm = ithm.freshen
+          (active_,(active_.deduceResolutions(freshThm) ++
+              active_.deduceParamodulations(freshThm)).toList)
+        }
+        else (active,List(simpedThm))
+
+    factor(active_,deductions)
   }
 
   // Hurd's factor logic as writing out a list of new theorems whilst updating
@@ -191,7 +190,10 @@ case class ActiveFactory[
       };
       newSubsumer = active.subsume.insert(ithm.clause,ithm.id);
       _ <- modifySW(
-        _.copy(units = newUnits, subsume = newSubsumer))
+        _.copy(
+          rewriter = newRewriter,
+          units    = newUnits,
+          subsume  = newSubsumer))
     )
     yield ()
 
@@ -201,7 +203,7 @@ case class ActiveFactory[
   // Apply f to its simplification (ignoring tautologies)
   def traverseSimplifies(ithms: List[ithmF.IThm])(f: ithmF.IThm => SW[Unit]):
       SW[Unit] =
-    ithms.traverse_ { ithm =>
+    sortUtilityWise(ithms).traverse_ { ithm =>
       simplifySW(ithm) >>= {
         case None         => ().point[SW]
         case Some(simped) => f(simped)
@@ -217,49 +219,43 @@ case class ActiveFactory[
   def deleteSW(ithms: Set[ithmF.IThm]): SW[Unit] = {
     val ids = ithms.map(_.id)
     modifySW { active => active.copy (
-      clauses     = active.clauses.filterKeys(ids(_)),
-      units       = active.units.filter { unit => ids(unit.ithm.id) },
-      subsume     = active.subsume.filter(ids(_)),
-      literals    = active.literals.filter    { case (_,ithm) => ids(ithm.id) },
-      equations   = active.equations.filter   { case (_,ithm) => ids(ithm.id) },
-      subterms    = active.subterms.filter    { case (_,ithm) => ids(ithm.id) },
-      allSubterms = active.allSubterms.filter { case (_,ithm) => ids(ithm.id) })
+      clauses     = active.clauses.filterKeys(!ids(_)),
+      units       = active.units.filter { unit => !ids(unit.ithm.id) },
+      subsume     = active.subsume.filter(!ids(_)),
+      literals    = active.literals.filter    { case (_,ithm) => !ids(ithm.id) },
+      equations   = active.equations.filter   { case (_,ithm) => !ids(ithm.id) },
+      subterms    = active.subterms.filter    { case (_,ithm) => !ids(ithm.id) },
+      allSubterms = active.allSubterms.filter { case (_,ithm) => !ids(ithm.id) })
     }
   }
 
-  def factor(active: Active,ithms: List[ithmF.IThm]): (Active, List[ithmF.IThm]) = {
-    def fact(ithms: List[ithmF.IThm]): SW[Unit] = {
-      val sortedThms = sortUtilityWise(ithms)
+  def factor(
+    initActive: Active,
+    ithms: List[ithmF.IThm]): (Active, List[ithmF.IThm]) = {
 
-      traverseSimplifies(sortedThms) { ithm =>
-        // Presimplified
-        val sortedThms = sortUtilityWise(ithm::ithmF.factor(ithm))
-        traverseSimplifies(sortedThms) { ithm =>
-          // Post simplified
-          for (
-            _                           <- addFactorSW(ithm) :++> List(ithm);
-            active                      <- getSW;
-            (newRewriter,newRewriteIds) = active.rewriter.reduce;
-            rewritables = findRewritables(active);
-            _ <- // Note: Restore the subsumer
-                 modifySW { active => active.copy(subsume = active.subsume) } *>
-                 deleteSW(rewritables) *>
-                 fact(rewritables.toList))
-          yield ()
-        }
+    // Subsumer is updated over the traversals, but then restored.
+    val restoreSubsumer =
+      modifySW { active => active.copy(subsume = initActive.subsume) }
+
+    def fact(ithms: List[ithmF.IThm]): SW[Unit] = {
+      if (ithms.length == 0)
+        ().point[SW]
+      else {
+        traverseSimplifies(ithms) { ithm =>
+          traverseSimplifies(ithm::ithmF.factor(ithm)) { ithm =>
+            addFactorSW(ithm) :++> List(ithm);
+          }
+        } *>
+        getSW >>= { active_ =>
+          val (newRewriter,newRewriteIds) = active_.rewriter.reduce
+          val rewritables                 = findRewritables(active_)
+          restoreSubsumer *>
+          deleteSW(rewritables) *>
+          fact(rewritables.toList) }
       }
     }
-    fact(ithms).written.run(active)
+    fact(ithms).written.run(initActive)
   }
-
-  //   val (newRewriter,newRewrites) = newSimplifier.rewriter.reduce
-
-  //     // val rewritables = findRewritables(newRewrites)
-  //   val ((newSimp,_),newIthms) = sw.written.run((simp,subsume))
-  //   // (newSimp,newIthms)
-
-  //   //   rewritables ++ factoredThms
-  // }
 
   def isUnitEql(thm: ithmF.IThm) =
     ithmF.UnitIThm.getUnit(thm) match {

@@ -169,7 +169,7 @@ object Nets {
 
   private def matchesArgs[V,F,A](
     args: List[Term[V,F]],
-    net:TermNetImpl[F,A]): List[A] =
+    net:TermNetImpl[F,A]): List[A] = {
     (args,net) match {
       case (List(),Result(xs)) => xs
       case (arg::args,Stem(pat,net2)) =>
@@ -187,6 +187,7 @@ object Nets {
         vresults++fresults
       case _ => throw new Error("Bug: matches")
     }
+  }
 
   private def qTermMatchesPat[V,F](
     θ: QSubst[V,F],
@@ -438,7 +439,10 @@ object Nets {
           }.getOrElse(List[A]())
         case Eql(l,r) =>
           val TermNet(net,_) = this.eqlNet
-          unifiesArgs(Map(), List(l,r), net)
+          net match {
+            case Empty() => List()
+            case _       => unifiesArgs(Map(), List(l,r), net)
+          }
       }
 
     def matches[V](atm: Atom[V,F,P]) =
@@ -449,7 +453,10 @@ object Nets {
           }.getOrElse(List[A]())
         case Eql(l,r) =>
           val TermNet(net,_) = this.eqlNet
-          matchesArgs(List(l,r), net)
+          net match {
+            case Empty() => List()
+            case _       => matchesArgs(List(l,r), net)
+          }
       }
 
     def matched[V](atm: Atom[V,F,P]) =
@@ -460,7 +467,10 @@ object Nets {
           }.getOrElse(List[A]())
         case Eql(l,r) =>
           val TermNet(net,_) = this.eqlNet
-          matchedArgs(Map(), List(l,r), net)
+          net match {
+            case Empty() => List()
+            case _       => matchedArgs(Map(), List(l,r), net)
+          }
       }
 
     def size =

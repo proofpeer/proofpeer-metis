@@ -10,7 +10,7 @@ import Ordering._
 class AtomSpec extends FlatSpec {
   "Knuth Bendix Ordering port" should " agree with original test suite" in
   {
-    implicit val ordFun = KnuthBendix.precendenceOrder[String,String]
+    implicit val ordFun = KnuthBendix.precedenceOrder[String,String]
     val kb = new KnuthBendix[String,String]({ case (_,_) => 1:Int })
 
     val tm1: Term[String,String] =
