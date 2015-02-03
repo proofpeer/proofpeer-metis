@@ -98,6 +98,7 @@ case class ActiveFactory[
         for (
           rewr        <- rewrites;
           (subterm,_) <- subterms.unifies(rewr.lhs);
+          if (subterm.get match { case Var(_) => false case _ => true });
           deduced     <- ithmF.paramodulate(rewr, subterm))
         yield deduced
       val paraInto =
@@ -106,6 +107,7 @@ case class ActiveFactory[
         else
           for (
             subterm  <- ithm.thm.largestSubterms(litOrder);
+            if (subterm.get match { case Var(_) => false case _ => true });
             (rewr,_) <- equations.unifies(subterm.get);
             deduced  <- ithmF.paramodulate(rewr, subterm))
           yield deduced
@@ -130,15 +132,13 @@ case class ActiveFactory[
       }
     }
 
-    def rewrite(ithm: ithmF.IThm) = {
-      val conv  = rewriter.rewr(ithm.id);
-      ithm.repeatTopDownConvRule(conv)
-    }
+    def rewrite(ithm: ithmF.IThm) =
+      ithm.repeatTopDownConvRule(rewriter.rewr(ithm.id))
 
     def simplify(ithm: ithmF.IThm) =
       for (
         simped    <- ithm.simplify;
-        rewritten = (rewrite(simped) >>= (_.simplify)).getOrElse(simped);
+        rewritten <- rewrite(simped).getOrElse(simped).simplify;
         resolved  = resolveUnits(rewritten);
         if !subsume.isStrictlySubsumed(resolved.clause)
       )
