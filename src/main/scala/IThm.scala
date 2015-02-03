@@ -101,21 +101,25 @@ case class IThmFactory[V:Order,F:Order,P:Order,FV,K<:Kernel[V,F,P]](
       new IThm(this.id,this.thm.subst(θ))
     }
 
-    def repeatTopDownConvRule(
-      conv: Term[V,F] => Option[(Term[V,F], kernel.Thm)]) = {
+    /** Apply a conversion to all lits of a theorem. */
+    def repeatTopDownConvRule(conv: Term[V,F] => Option[(Term[V,F], kernel.Thm)]) = {
 
-      val (changed,newThm) = clause.foldLeft((false,this.thm)) {
-        case ((changed,thm),lit) =>
-          val (convThm,newLit) = kernel.repeatTopDownConvRule(lit,conv);
-          if (lit == newLit)
-            (changed,thm)
-          else
-            (true,kernel.resolve(lit,thm,convThm).
-              getOrBug("Conversions should never fail."))
+      val lits     = clause.lits.toList
+      val convThms = lits.map { kernel.repeatTopDownConvRule(_,conv) }
+      val changed  = convThms.exists(_.isDefined)
+      if (!changed)
+        None
+      else {
+        val convThmsLits = (convThms,lits).zipped.map { case (convThm,lit) =>
+          convThm.map { (_,lit) }
+        }
+        val newThm = convThmsLits.flatten.foldLeft(thm)
+        { case (thm,((convThm,_),lit)) =>
+          kernel.resolve(lit,thm,convThm).
+            getOrBug("Conversions should never fail.")
+        }
+        IThm(this.id,newThm).some
       }
-      if (changed)
-        Some(IThm(id,newThm))
-      else None
     }
   }
 
@@ -187,17 +191,28 @@ case class IThmFactory[V:Order,F:Order,P:Order,FV,K<:Kernel[V,F,P]](
     val eql: Eql[V,F,P],
     private val direction: Direction) {
 
-    val lhs = direction match {
-      case LeftToRight() => eql.l
-      case RightToLeft() => eql.r
+    /** The theorem with equation appearing as lhs = rhs */
+    def topRewrite = direction match {
+      case LeftToRight() => top
+      case RightToLeft() =>
+        kernel.resolve(literal,top,kernel.sym(eql.l,eql.r)).getOrBug("topRewrite")
     }
-    val rhs = direction match {
-      case LeftToRight() => eql.r
-      case RightToLeft() => eql.l
+
+      kernel.sym(lhs,rhs)
+
+    def lhs = lr._1
+    def rhs = lr._2
+    def lr = direction match {
+      case LeftToRight() => (eql.l,eql.r)
+      case RightToLeft() => (eql.r,eql.l)
     }
     def substTop(θ: Subst[V,Term[V,F]]) =
       new RewriteCursor(top.subst(θ),eql.subst(θ),direction)
     def literal = Literal(true,eql)
+    def literalRewrite = {
+      val (l,r) = lr
+      Literal(true,Eql[V,F,P](l,r))
+    }
   }
 
   object RewriteCursor {
@@ -205,10 +220,13 @@ case class IThmFactory[V:Order,F:Order,P:Order,FV,K<:Kernel[V,F,P]](
       for (
         (lit@Literal(true,eql@Eql(x,y))) <- ithm.clause.lits;
         if litOrder.isMaximal(ithm.clause.lits)(lit);
-        rewr <- List(
-          new RewriteCursor(ithm.thm,eql,LeftToRight()),
-          new RewriteCursor(ithm.thm,eql,RightToLeft())))
-      yield rewr
+        ort <-
+        (if (termOrd.tryCompare(x,y) === Some(Ordering.GT))
+          List(LeftToRight()) else List()) ++
+        (if (termOrd.tryCompare(y,x) === Some(Ordering.GT))
+          List(RightToLeft()) else List()))
+      yield
+        new RewriteCursor(ithm.thm,eql,ort)
   }
 
   abstract sealed class Direction
@@ -227,12 +245,11 @@ case class IThmFactory[V:Order,F:Order,P:Order,FV,K<:Kernel[V,F,P]](
       Ordering.GT <- termOrd.tryCompare(rewr_.lhs,rewr_.rhs);
       equal = kernel.equality(lit_.clauseCursor.literalCursor, rewr_.rhs);
       val resolvent = (for (
-        resolvent1 <- kernel.resolve(rewr_.literal,rewr_.top,equal);
-        resolvent2 <- kernel.resolve(lit_.literal,lit_.top,resolvent1))
-      yield resolvent2) match {
-        case Some(resolvent) => resolvent
-        case None            => throw new Error("Bug: paramodulate")
-      })
+        resolvent1 <- kernel.resolve(rewr_.literalRewrite,rewr_.topRewrite,equal);
+        resolvent2 <- if (resolvent1.clause(lit_.literal.negate))
+                        kernel.resolve(lit_.literal,lit_.top,resolvent1)
+                      else Some(resolvent1))
+      yield resolvent2).getOrBug("paramodulate"))
     yield IThm(newId, resolvent)
   }
 }
