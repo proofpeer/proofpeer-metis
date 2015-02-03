@@ -3,10 +3,7 @@ proofpeer-metis
 
 A port of Joe Hurd's METIS  to Scala.
 
-Version 1.0 is a working automated prover, missing the following features from Hurd's METIS:
-
-1. No paramodulation or rewriting.
-2. No support for fixed models. All our models are randomly generated, with the exception that equality is always interpreted as equality.
+Latest version is a working automated prover without fixed models. All our models are randomly generated, with the exception that equality is always interpreted as equality.
   
 The exact number of resolution steps needed in proofs differs marginally from Hurd's, possibly due to either of two reasons:
 
@@ -14,7 +11,7 @@ The exact number of resolution steps needed in proofs differs marginally from Hu
 
 2. model generation is random and non-deterministic
 
-The port has been tested on the first ten set theory problems from TPTP, all of which are theorems, and solvable by METIS. We provide the number of resolution steps needed by Hurd's original prover (with and without random model checking) and our own.
+The port has been tested on the first ten set theory problems from TPTP, and two problems in grop theory, all of which are theorems, and solvable by METIS. We provide the number of resolution steps needed by Hurd's original prover (with and without random model checking) and our own.
 
 Problem   | Hurd (no mc) | Scala (no mc) | Hurd (mc) | Scala (mc)
 ----------|--------------|---------------|-----------|-----------
