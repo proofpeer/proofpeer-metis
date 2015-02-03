@@ -111,7 +111,7 @@ case class METISRewriting[V:Order,F:Order,P,FV,K<:Kernel[V,F,P]](kernel: K)(
   case class LHSCursor(cursor: Term.TermCursor[V,F]) extends Cursor
   case class RHSCursor(cursor: Term.TermCursor[V,F]) extends Cursor
 
-  class Rewriter private (
+  case class Rewriter private (
     known:    Map[Int,Equation],
     redexes:  Nets.TermNet[F,(Int,Rewrite)],
     subterms: Nets.TermNet[F,(Int,Cursor)],

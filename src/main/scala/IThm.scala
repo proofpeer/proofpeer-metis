@@ -186,10 +186,10 @@ case class IThmFactory[V:Order,F:Order,P:Order,FV,K<:Kernel[V,F,P]](
   }
 
   /** A cursor to a rewrite in an IThm */
-  class RewriteCursor private[IThmFactory](
-    val top: kernel.Thm,
-    val eql: Eql[V,F,P],
-    private val direction: Direction) {
+  case class RewriteCursor private[IThmFactory](
+    top: kernel.Thm,
+    eql: Eql[V,F,P],
+    direction: Direction) {
 
     /** The theorem with equation appearing as lhs = rhs */
     def topRewrite = direction match {

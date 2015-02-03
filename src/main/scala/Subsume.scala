@@ -10,7 +10,7 @@ import Scalaz._
 class Subsuming[V:Order, F, P, A] {
   type Id   = Int
   type Size = Int
-  private case class NonUnit (
+  case class NonUnit private[Subsuming](
     nextId:  Int,
     clauses: Map[Int,(List[Literal[V,F,P]], Clause[V,F,P],A)],
     fstLits: LiteralNet[F,P,(Id,Size)],
@@ -61,7 +61,7 @@ class Subsuming[V:Order, F, P, A] {
 
   // We don't really need to store the clause in the literal net. Used
   // with A for additional filtering in METIS.
-  class Subsume private[Subsuming] (
+  case class Subsume private[Subsuming] (
     containsEmpty: Boolean,
     units:         LiteralNet[F,P,(Literal[V,F,P],Clause[V,F,P],A)],
     nonunits:      NonUnit) {
@@ -129,7 +129,7 @@ class Subsuming[V:Order, F, P, A] {
           new Subsume(
             this.containsEmpty,
             this.units,
-            new NonUnit(
+            NonUnit(
               id+1,
               // insert the fstLit and sndLit at the back since at least one of them
               // will be guaranteed to give a valid substitution in the main
@@ -154,7 +154,7 @@ class Subsuming[V:Order, F, P, A] {
           val sndLits = this.nonunits.fstLits.filter {
             case (id,_) => cls.contains(id)
           }
-          new NonUnit(
+          NonUnit(
             this.nonunits.nextId,
             cls,
             fstLits,

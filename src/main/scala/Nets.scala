@@ -389,7 +389,7 @@ object Nets {
     * @param eqFunctor Internally, an atom net is just a term net, so we need a
     * functor to represent equality.
   */
-  class AtomNet[F,P,A] private (
+  case class AtomNet[F,P,A] private (
     predNets: Map[(P,Int),TermNet[F,A]],
     eqlNet: TermNet[F,A]) {
 
@@ -489,7 +489,8 @@ object Nets {
     * @tparam A the type of values
     *
   */
-  class LiteralNet[F,P,A] private (posNet: AtomNet[F,P,A], negNet: AtomNet[F,P,A]) {
+  case class LiteralNet[F,P,A] private
+    (posNet: AtomNet[F,P,A], negNet: AtomNet[F,P,A]) {
     /** Create an empty map. */
     def this() {
       this(new AtomNet(), new AtomNet())

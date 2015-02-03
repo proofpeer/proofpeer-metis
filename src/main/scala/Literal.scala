@@ -7,9 +7,9 @@ import scalaz._
 import Scalaz._
 
 object Literal {
-  sealed class TermCursor[V:Order,F,P] private[Literal] (
-    val top: Literal[V,F,P],
-    private[Literal] val cursor: Atom.TermCursor[V,F,P])
+  case class TermCursor[V:Order,F,P] private[Literal] (
+    top: Literal[V,F,P],
+    cursor: Atom.TermCursor[V,F,P])
       extends GenCursor[V,Term[V,F],Literal[V,F,P],TermCursor[V,F,P]] {
 
     /** Argument path from theTop to the cursor. */

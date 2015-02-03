@@ -12,10 +12,10 @@ object Atom {
     def path: List[Int]
   }
 
-  class PredCursor[V:Order,F,P] private[Atom](
-    val top: Pred[V,F,P],
-    private val pos: Int,
-    private val cursor: Term.TermCursor[V,F]) extends TermCursor[V,F,P] {
+  case class PredCursor[V:Order,F,P] private[Atom](
+    top: Pred[V,F,P],
+    pos: Int,
+    cursor: Term.TermCursor[V,F]) extends TermCursor[V,F,P] {
 
     /** Argument path from theTop to the cursor. */
     def path = pos::cursor.path
@@ -44,9 +44,9 @@ object Atom {
     }
   }
 
-  class LHSCursor[V:Order,F,P] private[Atom](
-    val top: Eql[V,F,P],
-    private val cursor: Term.TermCursor[V,F]) extends TermCursor[V,F,P] {
+  case class LHSCursor[V:Order,F,P] private[Atom](
+    top: Eql[V,F,P],
+    cursor: Term.TermCursor[V,F]) extends TermCursor[V,F,P] {
 
     override def path = 0::cursor.path
     override def get = cursor.get
@@ -61,9 +61,9 @@ object Atom {
     }
   }
 
-  class RHSCursor[V:Order,F,P] private[Atom](
-    val top: Eql[V,F,P],
-    private val cursor: Term.TermCursor[V,F]) extends TermCursor[V,F,P] {
+  case class RHSCursor[V:Order,F,P] private[Atom](
+    top: Eql[V,F,P],
+    cursor: Term.TermCursor[V,F]) extends TermCursor[V,F,P] {
     override def path = 1::cursor.path
     override def get = cursor.get
     override def replaceWith(replacement: Term[V,F]): Eql[V,F,P] =

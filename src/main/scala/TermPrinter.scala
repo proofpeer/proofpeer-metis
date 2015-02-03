@@ -8,6 +8,8 @@ object TermPrinter {
   def printTerm(tm: Term[String,String]): String = {
     tm match {
       case Var(v) => v
+      case Fun("Multiply",List(x,y)) =>
+        "(" ++ printTerm(x) ++ " * " + printTerm(y) ++ ")"
       case Fun(f,args) => f ++
         "(" ++
         intersperse(args.map(printTerm(_)),",").flatten ++

@@ -22,13 +22,11 @@ case class WaitingFactory[V:Order,F:Order,P,FV,
   private val modelWeightFactor = 1.0
   private val maxChecks         = Some(20)
 
-  class Waiting private (
+  case class Waiting private (
     ithms: SortedMap[Weight,List[(Distance,ithmF.IThm)]]) {
     def this() {
       this(SortedMap())
     }
-    // DEBUG
-    def theIthms = ithms
 
     def clauseWeight(distance: Double, ithm: ithmF.IThm) = {
       for (

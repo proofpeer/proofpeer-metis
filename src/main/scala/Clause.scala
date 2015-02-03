@@ -10,10 +10,10 @@ import util._
 import RichCollectionInstances._
 
 object Clause {
-  sealed class TermCursor[V:Order,F:Order,P:Order](
-    val top: Clause[V,F,P],
-    private val pos:    Int,
-    val literalCursor: Literal.TermCursor[V,F,P])
+  case class TermCursor[V:Order,F:Order,P:Order](
+    top: Clause[V,F,P],
+    pos:    Int,
+    literalCursor: Literal.TermCursor[V,F,P])
       extends GenCursor[V,Term[V,F],Clause[V,F,P],TermCursor[V,F,P]] {
 
     override def get = literalCursor.get

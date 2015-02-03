@@ -219,9 +219,9 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
   }
 
   /** Wrap a clause cursor to a subterm. */
-  class TermCursor private[Kernel](
-    val top: Thm,
-    val clauseCursor: Clause.TermCursor[V,F,P]) {
+  case class TermCursor private[Kernel](
+    top: Thm,
+    clauseCursor: Clause.TermCursor[V,F,P]) {
 
     def get = clauseCursor.get
     def literal = clauseCursor.literal
