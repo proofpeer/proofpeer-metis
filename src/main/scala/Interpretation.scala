@@ -277,10 +277,13 @@ case class Interpretation[V,F,P](
         for (
           mx     <- toModelTerm(x,valuation);
           my     <- toModelTerm(y,valuation);
-          perts  <- perturbTerm(mx, valsF.fin.filter { _ => true }.toList);
-          xv = valueModelTerm(mx);
-          perts_ <- perturbTerm(my, valsF.fin.filter (xv == _ == isPositive).toList))
-        yield perts ++ perts_
+          xv     =  valueModelTerm(mx);
+          yv     =  valueModelTerm(my);
+          xperts <- perturbTerm(mx, valsF.fin.filter
+            { v => (v == yv) == isPositive }.toList);
+          yperts <- perturbTerm(mx, valsF.fin.filter
+            { v => (v == xv) == isPositive }.toList))
+        yield xperts ++ yperts
       case Literal(isPositive,Pred(p,args)) =>
         for (
           margs   <- args.traverseU(toModelTerm(_,valuation));
