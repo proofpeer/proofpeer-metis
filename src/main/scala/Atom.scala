@@ -34,7 +34,10 @@ object Atom {
       val atm_    = cursor_.top
       top.args.splitAt(pos) match {
         case (pre,_::sucs) =>
-          val atm = Pred(top.functor,pre ++ (atm_ :: sucs))
+          val atm = Pred(
+            top.functor,pre.map(_.subst(θ)) ++
+              (atm_ ::
+                sucs.map(_.subst(θ))))
           new PredCursor(atm,pos,cursor_)
         case _ => throw new Error("Bug: No such subterm.")
       }
@@ -52,7 +55,7 @@ object Atom {
 
     override def substTop(θ: Subst[V,Term[V,F]]) = {
       val cursor_ = cursor.substTop(θ)
-      val lhs_    = cursor.top
+      val lhs_    = cursor_.top
       val rhs_    = top.r.subst(θ)
       new LHSCursor(Eql[V,F,P](lhs_,rhs_),cursor_)
     }
@@ -69,7 +72,7 @@ object Atom {
     override def substTop(θ: Subst[V,Term[V,F]]) = {
       val cursor_ = cursor.substTop(θ)
       val lhs_    = top.l.subst(θ)
-      val rhs_    = cursor.top
+      val rhs_    = cursor_.top
       new LHSCursor(Eql[V,F,P](lhs_,rhs_),cursor_)
     }
   }
