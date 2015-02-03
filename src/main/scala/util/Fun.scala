@@ -22,12 +22,41 @@ object Fun {
     loop(n)(x)
   }
 
-  def unfold[A](x: A)(f: A => Option[A]): A = {
-    f(x) match {
-      case None    => x
-        case Some(y) => unfold(y)(f)
+  /** A generic unfold. */
+  def unfoldM[M[_]:Monad,W:Monoid,A](x: A)(f: A => M[Option[(A,W)]]): M[W] = {
+    f(x) >>= {
+      case None          => ∅[W].point[M]
+      case (Some((y,w))) => unfoldM(y)(f).map {w ⊹ _}
     }
   }
+
+  /** A generic unfold */
+  def unfold[W:Monoid,A](x: A)(f: A => Option[(A,W)]): W =
+    unfoldM[Id,W,A](x)(f)
+
+  def RightBias[A] = new Monoid[Option[A]] {
+    def zero = None
+    def append(x: Option[A], y: => Option[A]) =
+      (x,y) match {
+        case (x,None) => x
+        case (_,y)    => y
+      }
+  }
+
+  /** Try to loop at least once, returning the last defined element. */
+  def loopM1[M[_]:Monad,A](x: A)(f : A => M[Option[A]]): M[Option[A]] = {
+    implicit val RightBiasMonoid = RightBias[A]
+    unfoldM[M,Option[A],A](x) { x => f(x).map(_.map { y => (y, Some(y)) }) }
+  }
+
+  /** Try to loop at least once, returning the last defined element. */
+  def loop1[A](x:A)(f: A => Option[A]): Option[A] =
+    loopM1[Id,A](x)(f)
+
+  def loopM[M[_]:Monad,A](x:A)(f: A => M[Option[A]]): M[A] =
+    loopM1(x)(f).map(_.getOrElse(x))
+
+  def loop[A](x:A)(f: A => Option[A]): A = loopM[Id,A](x)(f)
 
   def existsM[X,M[_]:Monad](xs: Iterator[X])(p: X => M[Boolean]): M[Boolean] = {
     var it = xs
