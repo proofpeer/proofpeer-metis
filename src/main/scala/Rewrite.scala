@@ -24,8 +24,8 @@ case class METISRewriting[V:Order,F:Order,P,FV,K<:Kernel[V,F,P]](kernel: K)(
       for (
         Literal(true,Eql(l,r)) <- eql.clause.lits.singleton;
         ort <- kbo.tryCompare(l,r) match {
-          case Some(Ordering.LT) => Some(Directed(LeftToRight()))
-          case Some(Ordering.GT) => Some(Directed(RightToLeft()))
+          case Some(Ordering.LT) => Some(Directed(RightToLeft()))
+          case Some(Ordering.GT) => Some(Directed(LeftToRight()))
           case Some(Ordering.EQ) => None
           case None              => Some(Bidirectional())
         })
@@ -40,8 +40,8 @@ case class METISRewriting[V:Order,F:Order,P,FV,K<:Kernel[V,F,P]](kernel: K)(
       case RightToLeft() => eqn.r
     }
     val redux = direction match {
-      case LeftToRight() => eqn.l
-      case RightToLeft() => eqn.r
+      case LeftToRight() => eqn.r
+      case RightToLeft() => eqn.l
     }
     def symEql = {
       (for (
@@ -50,16 +50,25 @@ case class METISRewriting[V:Order,F:Order,P,FV,K<:Kernel[V,F,P]](kernel: K)(
       yield thm).getOrBug("Should always be able to flip an equation.")
     }
 
+    def directedEql =
+      direction match {
+        case LeftToRight() => eqn.eql
+        case RightToLeft() => symEql
+      }
+
     val conv: Conv = tm =>
     for (
       θ <- redex.patMatch(Subst.empty,tm).headOption;
       // Skipping normalisation
-      tm_ = redux.subst(θ);
-      thm = direction match {
-        case LeftToRight() => eqn.eql
-        case RightToLeft() => symEql
-      })
-      yield (tm_,thm.subst(θ))
+      redex_ = redex.subst(θ);
+      redux_ = redux.subst(θ);
+      // TODO: I don't think this is Hurd's logic. In the case of undirected
+      // rules, he always converts. But as of now, weakening this leads to infinite
+      // loops.
+      if (kbo.tryCompare(redex_,redux_) === Some(Ordering.GT)))
+//      _ = System.out.println(kbo.tryCompare(redex_,redux_) === Some(Ordering.GT));
+//      _ = System.out.println("And so I yield"))
+    yield (redux_,directedEql.subst(θ))
   }
 
   object Rewrite {
@@ -129,13 +138,14 @@ case class METISRewriting[V:Order,F:Order,P,FV,K<:Kernel[V,F,P]](kernel: K)(
       new Rewriter(known_,redexes_,subterms,waiting_)
     }
 
-    /** Rewriting conversion. The first rewrite in the Rewriter is used.
+    /** Rewriting conversion. The first applicable rewrite in the Rewriter is used.
       * @param id An identifier for the theorem we are supposed to be converting:
       *           Used to check that a rewrite rule is not rewriting itself.
       */
     def rewr(id: Int): Conv = tm => {
       val thms = redexes.matches(tm).view.map {
         case (rewriteId,rewr) if id != rewriteId => rewr.conv(tm)
+        case _ => None
       }
       thms.find(_.isDefined).flatten
     }
@@ -187,6 +197,8 @@ case class METISRewriting[V:Order,F:Order,P,FV,K<:Kernel[V,F,P]](kernel: K)(
     // Given a clause, interreduce all negated (conditional) equalities with the
     // main rewrites, and use the final interreduced set of rewrites against all
     // literals in the clause.
+    // TODO: I think this is mostly dead code. Hurd's METIS only ever adds
+    // unit equalities into the rewriter. Damn.
     def interRewriteNeqs(thm: kernel.Thm, id: Int) = {
 
       val (map,lits) = mkNeqConvMap(thm.clause)
@@ -196,8 +208,8 @@ case class METISRewriting[V:Order,F:Order,P,FV,K<:Kernel[V,F,P]](kernel: K)(
         kv: (Literal[V,F,P], Conv)) = {
         val (key,_)    = kv
         val (map, lits, thm, changed) = acc
-        val (litConvThm,newLit) = mkNeqRule(id,map)(key)
-        if (key != newLit) {
+        mkNeqRule(id,map)(key).map { case (litConvThm,newLit) =>
+          mkNeqRule(id,map)(key)
           val newThm = kernel.resolve(newLit,litConvThm,thm).get
           newLit match {
             case NeqLit(l,r) =>
@@ -208,8 +220,7 @@ case class METISRewriting[V:Order,F:Order,P,FV,K<:Kernel[V,F,P]](kernel: K)(
             }
             case _ => (map - key, lits + key, thm, changed)
           }
-        }
-        else acc
+        }.getOrElse(acc)
       }
 
       def interRewrite(
@@ -231,7 +242,9 @@ case class METISRewriting[V:Order,F:Order,P,FV,K<:Kernel[V,F,P]](kernel: K)(
       val finalThm = lits.foldLeft(newThm) {
         case (accThm,lit) =>
           if (newThm.clause.contains(lit))
-            kernel.resolve(lit,neqRule(lit)._1,accThm).get
+            (neqRule(lit) >>= { case (convThm,_) =>
+              kernel.resolve(lit,convThm,accThm)
+            }).getOrElse(accThm)
           else accThm
       }
 
@@ -242,7 +255,9 @@ case class METISRewriting[V:Order,F:Order,P,FV,K<:Kernel[V,F,P]](kernel: K)(
       val (map, _)         = mkNeqConvMap(eqn.eql.clause)
       val eqLit            = Literal(true,Eql[V,F,P](eqn.l,eqn.r))
       val strongEqn        = !eqn.eql.clause.contains(eqLit)
-      val (eqThm,newEqLit) = mkNeqRule(thmId,map)(eqLit)
+      // TODO: Could exploit the fact that mkNeqRule returns None to say that no
+      // conversion occurred.
+      val (eqThm,newEqLit) = mkNeqRule(thmId,map)(eqLit).getOrElse((eqn.eql,eqLit))
       // Note: Leaving out optimisation checking whether the literal has changed
       newEqLit match {
         case newEqLit@Literal(true,Eql(l,r)) =>
