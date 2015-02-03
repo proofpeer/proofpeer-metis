@@ -302,7 +302,10 @@ object Nets {
           case net2    => Stem(tm,net2)
         }
         case Branch(vnet,fnet) =>
-          val vnet2 = vnet.map(filterNet(pred,_))
+          val vnet2 = vnet >>= (filterNet(pred,_) match {
+            case Empty() => None
+            case vnet    => vnet.some
+          })
           val fnet2 =
             fnet.mapValues(filterNet(pred, _))
               .filter {
@@ -312,7 +315,6 @@ object Nets {
           if (fnet2.isEmpty) {
             vnet2 match {
               case None          => Empty()
-              case Some(Empty()) => Empty()
               case Some(vnet2)   => Stem(Var[Unit,(F,Int)](()),vnet2)
             }
           }
