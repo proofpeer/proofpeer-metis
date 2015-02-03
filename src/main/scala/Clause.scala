@@ -37,7 +37,9 @@ object Clause {
       val lit_    = cursor_.top
       top.lits.toList.splitAt(pos) match {
         case (pre,_::sucs) =>
-          val cl = Clause((pre ++ (lit_ :: sucs)).toSet)
+          val cl = Clause(
+            (pre.map(_.subst(θ)) ++
+              (lit_ :: sucs.map(_.subst(θ)))).toSet)
           new TermCursor(cl,pos,cursor_)
         case _ => throw new Error("Bug: No such subterm.")
       }
