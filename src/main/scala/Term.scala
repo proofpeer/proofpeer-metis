@@ -23,7 +23,8 @@ object Term {
         case (_,List())           => replacement
         case (Fun(f,args), n::ns) =>
           args.splitAt(n) match {
-            case (pre,arg::sucs) => Fun(f,pre ++ (replaceAt(term,arg,ns)::sucs))
+            case (pre,arg::sucs) =>
+              Fun(f,pre ++ (replaceAt(arg,replacement,ns)::sucs))
             case _               =>
               throw new Error("Bug: No such subterm.")
           }
@@ -85,13 +86,14 @@ abstract sealed class Term[V:Order,F]
       List[Subst[V,Term[V,F]]] = {
     (this,otherTerm) match {
       case (Var(v1),Var(v2)) if v1 == v2 => List(θ)
-      case (Var(v),_) if otherTerm.freeIn(v) => List()
       case (Var(v),_) =>
         θ.lift(v) match {
           case None =>
             val otherTerm_ = otherTerm.subst(θ)
             if (this == otherTerm_)
               List(θ)
+            else if (otherTerm_.freeIn(v))
+              List()
             else {
               val vMapping = Subst.empty[V,Term[V,F]].bind(v,otherTerm_).get
               val θ2 = θ.mapRhs { _.subst(vMapping) }
@@ -103,11 +105,7 @@ abstract sealed class Term[V:Order,F]
       case (Fun(f1,args1),(Fun(f2,args2)))
           if f1 == f2 && args1.length == args2.length =>
         (args1 zip args2).foldLeftM(θ) {
-          (θ, args) => {
-            args match {
-              case (arg1,arg2) => arg1.unify(θ,arg2)
-            }
-          }
+          case (θ, (arg1,arg2)) => arg1.unify(θ,arg2)
         }
       case _ => List()
     }
@@ -144,7 +142,7 @@ abstract sealed class Term[V:Order,F]
         for (
           (arg,i) <- args.zipWithIndex;
           cursor  <- arg.allSubterms)
-        yield new Term.TermCursor(this,arg,i::cursor.path)
+        yield new Term.TermCursor(this,cursor.get,i::cursor.path)
       case _           => List()
     })
   }
