@@ -1,6 +1,8 @@
 package proofpeer.metis
 
 import ClauseInstances._
+import proofpeer.metis.util.Fun._
+import scala.language.higherKinds
 import scala.language.implicitConversions
 import scalaz._
 import Scalaz._
@@ -115,8 +117,7 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
   /**
     *  ------------------ equality L t
     *  ~(s = t) ∨ ~L ∨ L'
-    *  Where L' is the result of replacing the subterm s under L with t
-    *  Also returns L'.
+    *  Where L' is the result of replacing the subterm s under L with t.
     */
   def equality(lit: Literal.TermCursor[V,F,P], t: Term[V,F]) = {
     val s  = lit.get
@@ -136,78 +137,60 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
     Thm(Clause(cl),Sym())
   }
 
-  private def repeatTopDownConv(
+  // Write out a set of dependencies and a possible final clause containing
+  // the final equality and any additional hypotheses.
+  type W[A] = Writer[(Set[Thm],Option[Set[Literal[V,F,P]]]),A]
+
+  def convRule(conv: Term[V,F] => Option[(Term[V,F],Thm)]):
+      Term[V,F] => W[Option[Term[V,F]]] = tm =>
+  conv(tm) match {
+    case None => none.point[W]
+    case Some((newTm,thm)) =>
+      // TODO: We can be more general than this, but since METIS only does
+      // conversions with unit equalities, we'll regard it as a bug if a non-unit
+      // equality is used.
+      val eql = Literal[V,F,P](true,Eql(tm,newTm))
+      if (thm.clause.lits == Set(eql))
+        newTm.some.point[W] :++> ((Set(thm),some(thm.clause - eql)))
+      else throw new IllegalArgumentException("Invalid conversion")
+  }
+
+  private def tryRepeatTopDownConv(
     tm: Term[V,F],
-    conv: Term[V,F] => Option[(Term[V,F], Thm)]):
-      Option[(Term[V,F], Set[Literal[V,F,P]], Set[Thm])] = {
-    val (newTm, topClause, topDeps, topSuccess) =
-      util.Fun.unfold((tm,Set[Literal[V,F,P]](),Set[Thm](),false)) {
-        acc:(Term[V,F],Set[Literal[V,F,P]],Set[Thm],Boolean) =>
-        val (tm,clause,deps,_) = acc
-        conv(tm).map {
-          case (newTm, thm) =>
-            val eql = Literal[V,F,P](true,Eql(tm,newTm))
-            if (thm.clause.contains(eql))
-              (newTm, clause | thm.clause - eql, deps + thm,true)
-            else throw new Error("Invalid conversion")
-        }
-      }
-    val (newTm2, clause, deps, anySuccess) =
-      newTm match {
-        case Var(_) => (newTm, topClause, topDeps, false)
+    conv: (Term[V,F] => W[Option[Term[V,F]]])): W[Option[Term[V,F]]] = {
+    val topConv = loopM1[W,Term[V,F]](tm)(conv)
+    val depthConv: W[Option[Term[V,F]]] = topConv >>= { rewriteTop =>
+      val newTopTm = rewriteTop.getOrElse(tm)
+      newTopTm match {
         case Fun(f,args) =>
-          val (newArgs, newArgsClause, newArgsDeps, anySuccess) =
-            args.foldRight((List[Term[V,F]](),topClause,topDeps,false)) {
-              case (arg,(restArgs,restClause,restDeps,anySuccess)) =>
-                repeatTopDownConv(arg,conv) match {
-                  case Some((newArg,argClause,argDeps)) =>
-                    (newArg::restArgs,
-                      argClause | restClause,
-                      argDeps | restDeps, true)
-                  case None => (arg::restArgs, restClause, restDeps, anySuccess)
-                }
-            }
-          (Fun(f,newArgs), newArgsClause, newArgsDeps, anySuccess)
-      }
-    if (anySuccess) {
-      repeatTopDownConv(newTm2, conv) match {
-        case None => Some(newTm2, clause, deps)
-        case fix  => fix.map {
-          case (fixTm, fixClause, fixDeps) =>
-            (fixTm, clause | fixClause, fixDeps | deps)
-        }
+          args.traverse(tryRepeatTopDownConv(_,conv)) >>= { newArgs =>
+            val changed = newArgs.exists(_.isDefined)
+            if (!changed)
+              none.point[W]
+            else
+              repeatTopDownConv(
+                Fun(f,(newArgs,args).zipped.map { _.getOrElse(_) }),
+                conv).map(_.some)
+          }
+        case _ => none.point[W]
       }
     }
-    else if (topSuccess)
-      Some(newTm2, clause, deps)
-    else None
+    (depthConv |@| topConv) { _.orElse(_) }
   }
+
+  private def repeatTopDownConv(
+    tm: Term[V,F],
+    conv: (Term[V,F] => W[Option[Term[V,F]]])): W[Term[V,F]] =
+    tryRepeatTopDownConv(tm, conv).map { _.getOrElse(tm) }
 
   private def repeatTopDownConvAtom(
     atm: Atom[V,F,P],
-    conv: Term[V,F] => Option[(Term[V,F], Thm)]):
-      Option[(Atom[V,F,P], Set[Literal[V,F,P]], Set[Thm])] = {
+    conv: Term[V,F] => W[Option[Term[V,F]]]): W[Atom[V,F,P]] = {
     atm match {
       case Eql(x,y) =>
-        for (
-          (x2,eqlClause,eqlDeps)   <- repeatTopDownConv(x,conv);
-          (y2,eqlClause2,eqlDeps2) <- repeatTopDownConv(y,conv);
-          newClause = eqlClause | eqlClause2;
-          newDeps   = eqlDeps   | eqlDeps2)
-        yield (Eql[V,F,P](x2,y2), newClause, newDeps)
+        (repeatTopDownConv(x,conv) |@| repeatTopDownConv(y,conv)) { Eql(_,_) }
       case Pred(p,args) =>
-        args.foldRightM(
-          List[Term[V,F]](),
-          Set[Literal[V,F,P]](),
-          Set[Thm]()) {
-          case (arg, (restArgs,accClause,accDeps)) =>
-            for ((newArg,newAccClause,newAccDeps) <- repeatTopDownConv(arg,conv))
-            yield (
-              newArg::restArgs,
-              newAccClause | accClause,
-              newAccDeps | newAccDeps)
-        }.map { case (newArgs,newArgsClause,newArgsDeps) =>
-            (Pred(p,newArgs),newArgsClause,newArgsDeps) }
+        args.traverse(repeatTopDownConv(_,conv)).map { Pred(p,_) }
     }
   }
 
@@ -217,18 +200,22 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
     *
     *  where P' is the result of repeatedly traversing P, applying the
     *  conversion conv to every subterm until the conversion fails.
+    *  Returns None if no conversion took place.
     */
   def repeatTopDownConvRule(
     lit:  Literal[V,F,P],
     conv: Term[V,F] => Option[(Term[V,F], Thm)]) = {
-    repeatTopDownConvAtom(lit.atom,conv).map {
-      case (newLit, convClause, convDeps) =>
-        val newAtom = Literal(lit.isPositive,lit.atom)
-        (new Thm(
-          Clause(convClause + newAtom.negate + newAtom),
-          Conv(convDeps.toList)),
-          newAtom)
-    }.getOrElse((assume(lit),lit))
+
+    val isPositive = lit.isPositive
+    val atom       = lit.atom
+    val ((deps,lits),newAtom) = repeatTopDownConvAtom(atom,convRule(conv)).run
+
+    lits.map { lits =>
+      (Thm(
+        Clause(lits + Literal(!isPositive,atom) + Literal(isPositive,newAtom)),
+        Conv(deps.toList)),
+        Literal(lit.isPositive,newAtom))
+    }
   }
 
   /** Wrap a clause cursor to a subterm. */
