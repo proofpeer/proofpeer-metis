@@ -7,11 +7,10 @@ import scalaz._
 import Scalaz._
 
 object Term {
-  sealed class TermCursor[V:Order,F] private[Term] (
-    val top: Term[V,F],
-    private[Term] val cursorTerm: Term[V,F],
-    /** Argument path from theTop to the cursor. */
-    val path: List[Int]) extends GenCursor[V,Term[V,F],Term[V,F],TermCursor[V,F]] {
+  case class TermCursor[V:Order,F] private[Term] (
+    top: Term[V,F],
+    cursorTerm: Term[V,F],
+    path: List[Int]) extends GenCursor[V,Term[V,F],Term[V,F],TermCursor[V,F]] {
 
     override def get = cursorTerm
 
@@ -208,7 +207,7 @@ object Weight {
             w.c + funWeight(f,args.length)),args ++ tms)
       }
     implicit val ord = ordV.toScalaOrdering
-    wt(Weight(new TreeMap[V,Int],-1),List(tm))
+    wt(Weight(Map[V,Int](),-1),List(tm))
   }
 }
 

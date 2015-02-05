@@ -1,7 +1,7 @@
 package proofpeer.metis
 
 import Nets._
-import scala.collection.immutable.HashMap
+import scala.collection.immutable.Map
 import scala.collection.SeqView
 import scalaz._
 import Scalaz._
