@@ -30,8 +30,8 @@ case class IThmFactory[V:Order,F:Order,P:Order,FV,K<:Kernel[V,F,P]](
   /** Theorems with identifiers. All instance methods return new theorems but
       preserve the id. */
   case class IThm private[IThmFactory] (id: Int, thm: kernel.Thm) {
-    val clause = thm.clause
-    val rule   = thm.rule
+    def clause = thm.clause
+    def rule   = thm.rule
     def isTautology     = thm.isTautology
     def isContradiction = thm.isContradiction
 
