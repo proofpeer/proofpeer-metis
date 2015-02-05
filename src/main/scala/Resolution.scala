@@ -46,7 +46,7 @@ case class Resolution[V:Order,F:Order,P:Order,FV,K <: Kernel[V,F,P]](
 
   lazy val adeduced: Stream[(activeF.Active,List[ithmF.IThm])] = {
     zipWith(pulled,actives) {
-      case (Some(thm),a) => activeF.add(a,thm)
+      case (Some(thm),a) => Debug.profile("add",activeF.add(a,thm))
       case (None,a)      => (a,List[ithmF.IThm]())
     }
   }

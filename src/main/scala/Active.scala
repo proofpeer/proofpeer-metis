@@ -93,10 +93,9 @@ case class ActiveFactory[
       yield resolvent
 
     def deduceParamodulations(ithm: ithmF.IThm) = {
-      val rewrites = ithm.rewrites
       val paraWith =
         for (
-          rewr        <- rewrites;
+          rewr        <- ithm.rewrites;
           (subterm,_) <- subterms.unifies(rewr.lhs);
           if (subterm.get match { case Var(_) => false case _ => true });
           deduced     <- ithmF.paramodulate(rewr, subterm))
@@ -154,13 +153,13 @@ case class ActiveFactory[
       case Some(ithm) => ithm
     }
     val (active_,deductions) =
-        if (simpedThm == ithm) {
-          val active_  = active.addClause(ithm)
-          val freshThm = ithm.freshen
-          (active_,(active_.deduceResolutions(freshThm) ++
-              active_.deduceParamodulations(freshThm)).toList)
-        }
-        else (active,List(simpedThm))
+      if (simpedThm == ithm) {
+        val active_  = active.addClause(ithm)
+        val freshThm = ithm.freshen
+        (active_,(active_.deduceResolutions(freshThm) ++
+          active_.deduceParamodulations(freshThm)).toList)
+      }
+      else (active,List(simpedThm))
 
     factor(active_,deductions)
   }
