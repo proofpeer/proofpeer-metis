@@ -233,25 +233,36 @@ case class ActiveFactory[
     initActive: Active,
     ithms: List[ithmF.IThm]): (Active, List[ithmF.IThm]) = {
 
-    // Subsumer is updated over the traversals, but then restored.
-    val restoreSubsumer =
-      modifySW { active => active.copy(subsume = initActive.subsume) }
-
     def fact(ithms: List[ithmF.IThm]): SW[Unit] = {
-      if (ithms.length == 0)
-        ().point[SW]
-      else {
-        traverseSimplifies(ithms) { ithm =>
-          traverseSimplifies(ithm::ithmF.factor(ithm)) { ithm =>
-            addFactorSW(ithm) :++> List(ithm);
+      // Subsumer is updated over the traversals, but then restored.
+      getSW.map { active =>
+        modifySW { active_ =>
+          active_.copy(subsume = active.subsume) } } >>= { restore =>
+
+        if (ithms.length == 0)
+          ().point[SW]
+        else {
+          traverseSimplifies(ithms) { ithm =>
+            System.out.println("pre: " + Debug.stringClause(ithm.clause.lits))
+            traverseSimplifies(ithm::ithmF.factor(ithm)) { ithm =>
+              addFactorSW(ithm) :++> List(ithm);
+            }
+          }       *>
+          restore *>
+          getSW   >>= { active_ =>
+            if (active_.rewriter.isReduced)
+              ().point[SW]
+            else {
+              val (newRewriter,newRewriteIds) = active_.rewriter.reduce
+              val rewritables                 = findRewritables(active_)
+              rewritables.foreach { thm =>
+//                System.out.println("Extract: " + Debug.stringClause(thm.clause))
+              }
+              putSW(active_.copy(rewriter = newRewriter)) *>
+              deleteSW(rewritables) *>
+              fact(rewritables.toList) }
           }
-        } *>
-        getSW >>= { active_ =>
-          val (newRewriter,newRewriteIds) = active_.rewriter.reduce
-          val rewritables                 = findRewritables(active_)
-          restoreSubsumer *>
-          deleteSW(rewritables) *>
-          fact(rewritables.toList) }
+        }
       }
     }
     fact(ithms).written.run(initActive)
