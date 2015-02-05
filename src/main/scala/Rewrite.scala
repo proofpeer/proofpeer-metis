@@ -129,13 +129,15 @@ case class METISRewriting[V:Order,F:Order,P,FV,K<:Kernel[V,F,P]](kernel: K)(
     def add(id: Int, eqn: Equation) = {
       if (known.contains(id))
         this
-      val rewrs = Rewrite.ofEquation(eqn)
-      val known_   = known + (id → eqn);
-      val redexes_ = rewrs.foldLeft(redexes) {
-        case (r,rewr) => r.insert(rewr.redex,(id,rewr))
+      else {
+        val rewrs = Rewrite.ofEquation(eqn)
+        val known_   = known + (id → eqn);
+        val redexes_ = rewrs.foldLeft(redexes) {
+          case (r,rewr) => r.insert(rewr.redex,(id,rewr))
+        }
+        val waiting_ = waiting + id
+        new Rewriter(known_,redexes_,subterms,waiting_)
       }
-      val waiting_ = waiting + id
-      new Rewriter(known_,redexes_,subterms,waiting_)
     }
 
     /** Rewriting conversion. The first applicable rewrite in the Rewriter is used.
@@ -325,12 +327,13 @@ case class METISRewriting[V:Order,F:Order,P,FV,K<:Kernel[V,F,P]](kernel: K)(
 
       newEquation match {
         case None =>
+//          System.out.println("Baleete: " + Debug.stringClause(known(thmId).eql.clause))
           (new Rewriter(
             this.known - thmId,
             this.redexes,
             this.subterms,
             this.waiting),
-            ReduceAcc(redexesAcc, acc.subtermsAcc, acc.todoAcc, changedAcc))
+            ReduceAcc(redexesAcc, subtermsAcc, acc.todoAcc, changedAcc))
         case Some(newEqn) =>
           val todoAcc =
             if (!isNew && sameRedexes)
@@ -358,7 +361,7 @@ case class METISRewriting[V:Order,F:Order,P,FV,K<:Kernel[V,F,P]](kernel: K)(
         case (id, _) => !acc.redexesAcc.contains(id)
       }
       val newSubterms = this.subterms.filter {
-        case (id,_) => !acc.redexesAcc.contains(id)
+        case (id,_) => !acc.subtermsAcc.contains(id)
       }
 
       val newRedexes_ = acc.redexesAcc.foldLeft(newRedexes) {
@@ -390,15 +393,14 @@ case class METISRewriting[V:Order,F:Order,P,FV,K<:Kernel[V,F,P]](kernel: K)(
                 if thmId != thmId_
                 && !(todo.contains(thmId_))
                 && isOriented(eqn) =>
-
               val rewritable = for (
-                eqn <- known.get(thmId_);
+                eqn_ <- known.get(thmId_);
                 // We're following Hurd here, getting the actual subterm by following
                 // a path. I assume we need to do this because it's possible that
                 // the equation has been rewritten and that the subterm is no longer
                 // the one we originally put in the net. Otherwise, why not just
                 // store the term without a path/cursor?
-                subterm <- cursor.followPath(eqn);
+                subterm <- cursor.followPath(eqn_);
                 θ <- rewr.redex.patMatch(Subst.empty,subterm).headOption;
                 // skip normalisation of substitution
                 Ordering.GT <- kbo.tryCompare(rewr.redex,rewr.redux.subst(θ)))
