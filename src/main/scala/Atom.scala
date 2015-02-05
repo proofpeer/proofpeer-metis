@@ -73,7 +73,7 @@ object Atom {
       val cursor_ = cursor.substTop(θ)
       val lhs_    = top.l.subst(θ)
       val rhs_    = cursor_.top
-      new LHSCursor(Eql[V,F,P](lhs_,rhs_),cursor_)
+      new RHSCursor(Eql[V,F,P](lhs_,rhs_),cursor_)
     }
   }
 }
