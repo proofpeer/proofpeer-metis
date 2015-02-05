@@ -8,6 +8,7 @@ object TermPrinter {
   def printTerm(tm: Term[String,String]): String = {
     tm match {
       case Var(v) => v
+      case Fun(f,List()) => f
       case Fun("Multiply",List(x,y)) =>
         "(" ++ printTerm(x) ++ " * " + printTerm(y) ++ ")"
       case Fun(f,args) => f ++
@@ -20,6 +21,7 @@ object TermPrinter {
   def printAtom(atom: Atom[String,String,String]): String = {
     atom match {
       case Eql(x,y)     => printTerm(x) ++ "=" ++ printTerm(y)
+      case Pred(p,List()) => p
       case Pred(p,args) =>
         p ++
         "(" ++
