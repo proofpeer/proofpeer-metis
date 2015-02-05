@@ -1,9 +1,6 @@
 package proofpeer.metis
 
 import scala.collection.immutable._
-import scala.collection.immutable.MapLike
-import scala.collection.SetLike
-import scala.collection.TraversableLike
 import scalaz._
 import Scalaz._
 
