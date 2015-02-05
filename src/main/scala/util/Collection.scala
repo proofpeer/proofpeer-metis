@@ -3,6 +3,20 @@ import scala.collection.Set
 import scala.collection.IterableLike
 import scala.collection.TraversableLike
 import scala.collection.generic.CanBuildFrom
+import scala.language.higherKinds
+import scalaz._
+import Scalaz._
+
+class RichFoldable[F[_]:Foldable,A](xs: F[A])(implicit ev:ApplicativePlus[F]) {
+  def distinctBy(p: (A,A) => Boolean) = {
+    xs.foldLeft((ev.monoid[A].zero,Set[A]())) {
+      case ((acc,dups),x) =>
+        if (dups.exists(y => p(x,y)))
+          (acc,dups)
+        else (ev.monoid.append(acc,ev.point(x)), dups + x)
+    }
+  }
+}
 
 class RichIterable[A, This](xs: IterableLike[A,This]) {
   def distinctBy[That](p: (A,A) => Boolean)(implicit
@@ -14,14 +28,8 @@ class RichIterable[A, This](xs: IterableLike[A,This]) {
         builder += x
         dups += x
       }
-    }
+   }
     builder.result
-  }
-
-  def foldLeftOpt[B](b:B)(f: (B,A) => Option[B]) = {
-    xs.foldLeft(b) {
-      case (acc,x) => f(acc,x).getOrElse(acc)
-    }
   }
 }
 
@@ -45,6 +53,10 @@ import scala.language.implicitConversions
 object RichCollectionInstances {
   implicit def toRichIterable[A,This](xs: IterableLike[A,This]) =
     new RichIterable(xs)
+  implicit def toRichFoldable[F[_]:Foldable,A](xs: F[A])(
+    implicit ev:ApplicativePlus[F]) {
+    new RichFoldable(xs)
+  }
   implicit def toRichTraversable[A,That,This <: TraversableLike[A,That]](
     xs: TraversableLike[A,This]) =
     new RichTraversable[A,That,This](xs)
