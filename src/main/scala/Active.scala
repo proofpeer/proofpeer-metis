@@ -242,7 +242,6 @@ case class ActiveFactory[
           ().point[SW]
         else {
           traverseSimplifies(ithms) { ithm =>
-            System.out.println("pre: " + Debug.stringClause(ithm.clause.lits))
             traverseSimplifies(ithm::ithmF.factor(ithm)) { ithm =>
               addFactorSW(ithm) :++> List(ithm);
             }
@@ -254,9 +253,6 @@ case class ActiveFactory[
             else {
               val (newRewriter,newRewriteIds) = active_.rewriter.reduce
               val rewritables                 = findRewritables(active_)
-              rewritables.foreach { thm =>
-//                System.out.println("Extract: " + Debug.stringClause(thm.clause))
-              }
               putSW(active_.copy(rewriter = newRewriter)) *>
               deleteSW(rewritables) *>
               fact(rewritables.toList) }
