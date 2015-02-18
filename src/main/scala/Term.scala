@@ -7,7 +7,7 @@ import scalaz._
 import Scalaz._
 
 object Term {
-  case class TermCursor[V:Order,F] private[Term] (
+  case class TermCursor[V,F] private[Term] (
     top: Term[V,F],
     cursorTerm: Term[V,F],
     path: List[Int]) extends GenCursor[V,Term[V,F],Term[V,F],TermCursor[V,F]] {
@@ -34,7 +34,7 @@ object Term {
     override def replaceWith(replacement: Term[V,F]): Term[V,F] =
       replaceAt(this.top,replacement,this.path)
 
-    override def substTop(θ: Subst[V,Term[V,F]]) =
+    override def substTop(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]) =
       new TermCursor(top.subst(θ),cursorTerm.subst(θ),path)
   }
 }
@@ -44,7 +44,7 @@ object Term {
   * @tparam V The alphabet from which variable names are drawn
   * @tparam F The alphabet from which functor names are drawn
   */
-abstract sealed class Term[V:Order,F]
+abstract sealed class Term[V,F]
     extends GenTerm[V,Term[V,F],Term.TermCursor[V,F],Term[V,F]] {
 
   override def freeIn(v: V): Boolean = {
@@ -64,7 +64,8 @@ abstract sealed class Term[V:Order,F]
     }
   }
 
-  override def patMatch(θ: Subst[V,Term[V,F]],term: Term[V,F]):
+  override def patMatch(θ: Subst[V,Term[V,F]],term: Term[V,F])(
+    implicit ev: Order[V]):
       List[Subst[V,Term[V,F]]] = {
     (this,term) match {
       case (Var(v),tm) => θ.bind(v,tm).toList
@@ -81,7 +82,8 @@ abstract sealed class Term[V:Order,F]
     }
   }
 
-  override def unify(θ: Subst[V,Term[V,F]],otherTerm: Term[V,F]):
+  override def unify(θ: Subst[V,Term[V,F]],otherTerm: Term[V,F])(implicit
+      ev: Order[V]):
       List[Subst[V,Term[V,F]]] = {
     (this,otherTerm) match {
       case (Var(v1),Var(v2)) if v1 == v2 => List(θ)
@@ -117,7 +119,7 @@ abstract sealed class Term[V:Order,F]
   //   * As in much of the HOL Light kernel code, terms are not reconstructed if
   //     the constructor arguments are pointer-equal. Could go for this without
   //     having to change any types.
-  override def subst(θ: Subst[V,Term[V,F]]) = {
+  override def subst(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]) = {
     def sub(term: Term[V,F]): Term[V,F] = {
       term match {
         case Var(v)      => θ.lift(v).getOrElse(term)
@@ -147,8 +149,8 @@ abstract sealed class Term[V:Order,F]
   }
 }
 
-case class Var[V:Order,F](v: V) extends Term[V,F]
-case class Fun[V:Order,F](f: F, args: List[Term[V,F]]) extends Term[V,F]
+case class Var[V,F](v: V) extends Term[V,F]
+case class Fun[V,F](f: F, args: List[Term[V,F]]) extends Term[V,F]
 
 object TermInstances {
   implicit def ordTerm[V:Order,F:Order]: Order[Term[V,F]] =
@@ -162,6 +164,30 @@ object TermInstances {
             (args1.length,f1,args1) ?|? (args2.length,f2,args2)
         }
     }
+
+  implicit def TermIsMonad[F] = new Monad[({type λ[V] = Term[V,F]})#λ] {
+    override def point[V](x: => V) = Var[V,F](x)
+    override def bind[U,V](tm: Term[U,F])(f: U => Term[V,F]): Term[V,F] = {
+      tm match {
+        case Var(v)       => f(v)
+        case Fun(fn,args) => Fun[V,F](fn,args map (bind(_)(f)))
+      }
+    }
+  }
+
+  implicit def TermIsShow[V:Show,F:Show] = new Show[Term[V,F]] {
+    override def show(tm: Term[V,F]): Cord = {
+      tm match {
+      case Var(v) => v.show
+      case Fun(f,List()) => f.show
+      case Fun("Multiply",List(x,y)) =>
+        Cord("(") ++ show(x) ++ " * " ++ show(y) ++ Cord(")")
+      case Fun(f,args) => f.show ++
+          Cord("(") ++ Cord.mkCord(",",args.map(show(_)):_*)
+        ")"
+      }
+    }
+  }
 }
 
 case class Weight[V] private (nameMap : Map[V,Int], c: Int) {

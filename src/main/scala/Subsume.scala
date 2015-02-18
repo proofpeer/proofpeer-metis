@@ -35,7 +35,7 @@ class Subsuming[V:Order, F, P, A] {
             σ_    <- σs;
             nextσ <- σ.union(σ_).toList)
             return search(nextσ, σss_)
-          return false
+          return false // TODO: Bad style
       }
     }
 
@@ -50,7 +50,7 @@ class Subsuming[V:Order, F, P, A] {
           lit2 <- lits2;
           σ    <- lit1.patMatch(θ_, lit2))
         yield σ }.toList match {
-        case List()  => return false
+        case List()  => return false // TODO: Bad style
         case List(σ) => θ = θ_.union(σ); List(σ)
         case σs      => σs
       }

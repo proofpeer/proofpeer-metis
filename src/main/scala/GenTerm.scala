@@ -51,21 +51,21 @@ object Subst {
 trait GenTerm[V,T,C <: GenCursor[V,T,GT,C],GT] { this: GT =>
   def frees: Set[V]
   def freeIn(v: V): Boolean
-  def subst(θ: Subst[V,T]): GT
+  def subst(θ: Subst[V,T])(implicit ev: Order[V]): GT
 
   def heuristicSize: Int
 
   /** Treat this term as a pattern and match it against term. */
-  def patMatch(θ: Subst[V,T], term: GT): List[Subst[V,T]]
+  def patMatch(θ: Subst[V,T], term: GT)(implicit ev: Order[V]): List[Subst[V,T]]
 
-  def unify(θ: Subst[V,T], term: GT): List[Subst[V,T]]
+  def unify(θ: Subst[V,T], term: GT)(implicit ev: Order[V]): List[Subst[V,T]]
 
   def allSubterms: List[C]
 }
 
 trait GenCursor[V,T,GT,C] { this: C =>
   /** Substitute across the whole term, preserving the cursor. */
-  def substTop(θ: Subst[V,T]): C
+  def substTop(θ: Subst[V,T])(implicit ev: Order[V]): C
 
   /** The term under the cursor. */
   def get: T

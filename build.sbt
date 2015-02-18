@@ -1,6 +1,6 @@
 organization := "net.proofpeer"
 
-name := "METIS port"
+name := "metis"
 
 version := "0.1-SNAPSHOT"
 

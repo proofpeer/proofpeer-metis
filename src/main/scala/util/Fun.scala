@@ -35,6 +35,7 @@ object Fun {
     unfoldM[Id,W,A](x)(f)
 
   /** Options are monoids favouring the right. */
+  // TODO: This is an orphan instance. Reimplement Option.
   def RightBias[A] = new Monoid[Option[A]] {
     def zero = None
     def append(x: Option[A], y: => Option[A]) =

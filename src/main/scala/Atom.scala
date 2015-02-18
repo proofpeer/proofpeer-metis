@@ -12,7 +12,7 @@ object Atom {
     def path: List[Int]
   }
 
-  case class PredCursor[V:Order,F,P] private[Atom](
+  case class PredCursor[V,F,P] private[Atom](
     top: Pred[V,F,P],
     pos: Int,
     cursor: Term.TermCursor[V,F]) extends TermCursor[V,F,P] {
@@ -29,7 +29,7 @@ object Atom {
       }
     }
 
-    override def substTop(θ: Subst[V,Term[V,F]]) = {
+    override def substTop(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]) = {
       val cursor_ = cursor.substTop(θ)
       val atm_    = cursor_.top
       top.args.splitAt(pos) match {
@@ -44,7 +44,7 @@ object Atom {
     }
   }
 
-  case class LHSCursor[V:Order,F,P] private[Atom](
+  case class LHSCursor[V,F,P] private[Atom](
     top: Eql[V,F,P],
     cursor: Term.TermCursor[V,F]) extends TermCursor[V,F,P] {
 
@@ -53,7 +53,7 @@ object Atom {
     override def replaceWith(replacement: Term[V,F]): Eql[V,F,P] =
       Eql(cursor.replaceWith(replacement),top.r)
 
-    override def substTop(θ: Subst[V,Term[V,F]]) = {
+    override def substTop(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]) = {
       val cursor_ = cursor.substTop(θ)
       val lhs_    = cursor_.top
       val rhs_    = top.r.subst(θ)
@@ -61,7 +61,7 @@ object Atom {
     }
   }
 
-  case class RHSCursor[V:Order,F,P] private[Atom](
+  case class RHSCursor[V,F,P] private[Atom](
     top: Eql[V,F,P],
     cursor: Term.TermCursor[V,F]) extends TermCursor[V,F,P] {
     override def path = 1::cursor.path
@@ -69,7 +69,7 @@ object Atom {
     override def replaceWith(replacement: Term[V,F]): Eql[V,F,P] =
       Eql(top.l,cursor.replaceWith(replacement))
 
-    override def substTop(θ: Subst[V,Term[V,F]]) = {
+    override def substTop(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]) = {
       val cursor_ = cursor.substTop(θ)
       val lhs_    = top.l.subst(θ)
       val rhs_    = cursor_.top
@@ -84,7 +84,7 @@ object Atom {
   * @tparam F The alphabet from which functor names are drawn
   * @tparam P The alphabet from which predicate names are drawn
   */
-abstract sealed class Atom[V:Order,F,P]
+abstract sealed class Atom[V,F,P]
     extends GenTerm[V,Term[V,F],Atom.TermCursor[V,F,P],Atom[V,F,P]] {
 
   override def frees = this match {
@@ -99,7 +99,8 @@ abstract sealed class Atom[V:Order,F,P]
     case Eql(l,r)     => l.freeIn(v) || r.freeIn(v)
   }
 
-  override def patMatch(θ: Subst[V,Term[V,F]], atm: Atom[V,F,P]):
+  override def patMatch(θ: Subst[V,Term[V,F]], atm: Atom[V,F,P])(
+    implicit ev: Order[V]):
       List[Subst[V,Term[V,F]]] =
     (this,atm) match {
       case (Pred(p1,args1), Pred(p2,args2))
@@ -115,7 +116,7 @@ abstract sealed class Atom[V:Order,F,P]
       case _ => List()
     }
 
-  override def unify(θ: Subst[V,Term[V,F]], atm: Atom[V,F,P]):
+  override def unify(θ: Subst[V,Term[V,F]], atm: Atom[V,F,P])(implicit ev: Order[V]):
       List[Subst[V,Term[V,F]]] =
     (this,atm) match {
       case (Pred(p1,args1), Pred(p2,args2))
@@ -156,14 +157,14 @@ abstract sealed class Atom[V:Order,F,P]
 }
 
 /** Predications P(...args...) */
-case class Pred[V:Order,F,P](functor: P, args: List[Term[V,F]]) extends Atom[V,F,P] {
-  override def subst(θ: Subst[V,Term[V,F]]): Pred[V,F,P] =
+case class Pred[V,F,P](functor: P, args: List[Term[V,F]]) extends Atom[V,F,P] {
+  override def subst(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]): Pred[V,F,P] =
     Pred(functor,args.map(_.subst(θ)))
 }
 
 /** Equations */
-case class Eql[V:Order,F,P](l: Term[V,F], r: Term[V,F]) extends Atom[V,F,P] {
-  override def subst(θ: Subst[V,Term[V,F]]): Eql[V,F,P] =
+case class Eql[V,F,P](l: Term[V,F], r: Term[V,F]) extends Atom[V,F,P] {
+  override def subst(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]): Eql[V,F,P] =
     Eql(l.subst(θ),r.subst(θ))
 }
 
@@ -183,5 +184,15 @@ object AtomInstances {
           case (Pred(_,_),Eql(_,_))             => Ordering.GT
           case (Eql(l1,r1),Eql(l2,r2))          => (l1,r1) ?|? (l2,r2)
         }
+  }
+
+  implicit def AtomIsShow[V:Show,F:Show,P:Show] = new Show[Atom[V,F,P]] {
+    override def show(atom: Atom[V,F,P]) = atom match {
+      case Eql(x,y)       => x.show ++ Cord("=") ++ y.show
+      case Pred(p,List()) => p.show
+      case Pred(p,args)   =>
+        p.show ++
+        Cord("(") ++ Cord.mkCord(",",args.map(_.show):_*) ++ ")"
+    }
   }
 }

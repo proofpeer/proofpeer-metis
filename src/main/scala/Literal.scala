@@ -7,7 +7,7 @@ import scalaz._
 import Scalaz._
 
 object Literal {
-  case class TermCursor[V:Order,F,P] private[Literal] (
+  case class TermCursor[V,F,P] private[Literal] (
     top: Literal[V,F,P],
     cursor: Atom.TermCursor[V,F,P])
       extends GenCursor[V,Term[V,F],Literal[V,F,P],TermCursor[V,F,P]] {
@@ -19,7 +19,7 @@ object Literal {
     override def replaceWith(replacement: Term[V,F]): Literal[V,F,P] =
       new Literal(top.isPositive,cursor.replaceWith(replacement))
 
-    override def substTop(θ: Subst[V,Term[V,F]]) = {
+    override def substTop(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]) = {
       val cursor_ = cursor.substTop(θ)
       val lit_    = Literal(top.isPositive,cursor_.top)
       new TermCursor(lit_,cursor_)
@@ -35,18 +35,21 @@ object Literal {
   *
   * @param isPositive Is this a non-negated atomic formula?
   */
-case class Literal[V:Order,F,P](isPositive: Boolean, atom: Atom[V,F,P])
+case class Literal[V,F,P](isPositive: Boolean, atom: Atom[V,F,P])
     extends GenTerm[V,Term[V,F],Literal.TermCursor[V,F,P],Literal[V,F,P]] {
   def negate() = Literal(!this.isPositive, this.atom)
 
   override def frees = atom.frees
   override def freeIn(v: V) = atom.freeIn(v)
-  override def subst(θ: Subst[V,Term[V,F]]) = Literal(isPositive,atom.subst(θ))
-  override def patMatch(θ: Subst[V,Term[V,F]], lit: Literal[V,F,P]) =
+  override def subst(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]) =
+    Literal(isPositive,atom.subst(θ))
+  override def patMatch(θ: Subst[V,Term[V,F]], lit: Literal[V,F,P])(
+    implicit ev: Order[V]) =
     if (isPositive == lit.isPositive)
       atom.patMatch(θ,lit.atom)
     else List()
-  override def unify(θ: Subst[V,Term[V,F]], lit: Literal[V,F,P]) =
+  override def unify(θ: Subst[V,Term[V,F]], lit: Literal[V,F,P])(
+    implicit ev: Order[V]) =
     if (isPositive == lit.isPositive)
       atom.unify(θ,lit.atom)
     else List()
@@ -104,7 +107,12 @@ class MetisLiteralOrdering[V:Order,F](termOrd: PartialOrder[Term[V,F]])
 object LiteralInstances {
   import AtomInstances._
   implicit def LiteralOrder[V:Order,F:Order,P:Order] = new Order[Literal[V,F,P]] {
-    def order(lit1: Literal[V,F,P], lit2: Literal[V,F,P]) =
+    override def order(lit1: Literal[V,F,P], lit2: Literal[V,F,P]) =
       (lit1.isPositive, lit1.atom) ?|? (lit2.isPositive, lit2.atom)
+  }
+
+  implicit def Show[V:Show,F:Show,P:Show] = new Show[Literal[V,F,P]] {
+    override def show(lit: Literal[V,F,P]) =
+      if (!lit.isPositive) Cord("~") else ∅[Cord] ++ lit.atom.show
   }
 }
