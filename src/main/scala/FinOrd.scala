@@ -47,7 +47,7 @@ case class FinOrd(size: Int) {
     yield f
   }
 
-  def filterM[M[_]: Monad](p: Fin => M[Boolean]) = {
+  def filterM[M[_]: Monad](p: Fin => M[Boolean]): M[List[Fin]] = {
      (0 to (size-1)).toList.map(Fin(_)).filterM(p)
   }
 

@@ -9,7 +9,7 @@ import Scalaz._
   * @tparam V alphabet from which variables are drawn
   * @tparam T type of terms substituted
   */
-case class Subst[V:Order,T] private(θ: V ==>> T) extends PartialFunction[V,T] {
+case class Subst[V:Order,T](θ: V ==>> T) extends PartialFunction[V,T] {
   override def isDefinedAt(v: V) = θ.member(v)
   override def apply(v: V): T = this.lookup(v).get
 

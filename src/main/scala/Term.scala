@@ -175,16 +175,23 @@ object TermInstances {
     }
   }
 
+  implicit def TermIsBifunctor = new Bifunctor[Term] {
+    override def bimap[V,F,V_,F_](tm: Term[V,F])(f: V => V_,g: F => F_):
+        Term[V_,F_] = {
+      tm match {
+        case Var(v)       => Var(f(v))
+        case Fun(fn,args) => Fun(g(fn),args.map(bimap(_)(f,g)))
+      }
+    }
+  }
+
   implicit def TermIsShow[V:Show,F:Show] = new Show[Term[V,F]] {
     override def show(tm: Term[V,F]): Cord = {
       tm match {
       case Var(v) => v.show
       case Fun(f,List()) => f.show
-      case Fun("Multiply",List(x,y)) =>
-        Cord("(") ++ show(x) ++ " * " ++ show(y) ++ Cord(")")
       case Fun(f,args) => f.show ++
-          Cord("(") ++ Cord.mkCord(",",args.map(show(_)):_*)
-        ")"
+          Cord("(") ++ Cord.mkCord(",",args.map(show(_)):_*) ++ Cord(")")
       }
     }
   }
