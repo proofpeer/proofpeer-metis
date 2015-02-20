@@ -27,14 +27,15 @@ class ResolutionSpec extends FlatSpec {
     val ithmF  = new IThmFactory[String,String,String,Int,kernel.type](
       kernel,
       0,
-      n => (n+1, "genvar" + n),
+      { case (n,_) => (n+1, "genvar" + n) },
       litOrd,
       factor)
 
     val clauses = litss.map { lits => Clause(lits.toSet) }
     val interpretation = Interpretation[String,String,String](1000,vals)
     val sys = new Resolution(0,clauses,ithmF,interpretation)
-    val pulls      = sys.dpulled.takeWhile { thm2 => !(thm2._2.get.isContradiction) }
+    val pulls      = sys.distance_nextThms.takeWhile {
+      thm2 => !(thm2._2.get.isContradiction) }
     val pullsLimit = pulls.take(((tolerance + 1) * expectedSteps + 1).toInt)
     val noSteps    = pullsLimit.length
     val discrepancy    = Math.abs(noSteps - expectedSteps)

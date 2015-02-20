@@ -20,7 +20,7 @@ import Scalaz._
 case class IThmFactory[V:Order,F:Order,P:Order,FV,K<:Kernel[V,F,P]](
   kernel: K,
   initState: FV,
-  nextV : FV => (FV,V),
+  nextV : (FV,V) => (FV,V),
   litOrder: LiteralOrdering[V,F,P],
   factorClause: Clause[V,F,P] => Iterator[Subst[V,Term[V,F]]])(implicit
     termOrd: PartialOrder[Term[V,F]]) {
@@ -94,7 +94,7 @@ case class IThmFactory[V:Order,F:Order,P:Order,FV,K<:Kernel[V,F,P]](
       val fvs = this.clause.flatMap(_.frees)
       val θ   = fvs.foldLeft(Subst.empty[V,Term[V,F]]) {
         case (θ,v) =>
-          val (newState,freshVar) = nextV(theState)
+          val (newState,freshVar) = nextV(theState,v)
           theState = newState
           θ.bind(v,Var(freshVar)).get
       }

@@ -25,48 +25,66 @@ case class Resolution[V:Order,F:Order,P:Order,FV,K <: Kernel[V,F,P]](
     ithmF.litOrder,
     new Subsuming[V,F,P,Int]
   )
-  val active = new activeF.Active
+  private val active = new activeF.Active
+
   val waitingF = new WaitingFactory[V,F,P,FV,K,ithmF.type](
     ithmF,
     ithmF.litOrder,
     interpret)
-  val waiting = new waitingF.Waiting
 
-  val initThms = initClauses.map(ithmF.axiom(_))
-  val (initActive,factoredThms) = activeF.factor(active, initThms)
-  val (s,initW) = waiting.add(0,factoredThms,100).run(
+  private val waiting = new waitingF.Waiting
+
+  private val initThms: List[ithmF.IThm] = initClauses.map(ithmF.axiom(_))
+
+  private val (initActive,factoredThms): (activeF.Active, List[ithmF.IThm]) =
+    activeF.factor(active, initThms)
+
+  private val (s,initW) = waiting.add(0,factoredThms,100).run(
     waitingF.interpret.initState(seed))
 
-  lazy val waitings1: Stream[(waitingF.interpret.S,waitingF.Waiting)] =
+  /** The waiting sets immediately after a theorem is added. */
+  lazy val waitingsAdded: Stream[(waitingF.interpret.S,waitingF.Waiting)] =
     (s,initW) #:: waitingF.interpret.preview(
-      zipWith3(distances,deduced,waitings2) {
+      zipWith3(distances,deduced,waitingsRemoved) {
         case (Some(dist),deduced,w) => w.add(dist,deduced,0)
         case (_,_,w)                => w.point[waitingF.interpret.M]
       })(s)
 
-  lazy val adeduced: Stream[(activeF.Active,List[ithmF.IThm])] = {
-    zipWith(pulled,actives) {
+  private lazy val actives_deduced: Stream[(activeF.Active,List[ithmF.IThm])] = {
+    zipWith(nextThms,actives) {
       case (Some(thm),a) => Debug.profile("add",activeF.add(a,thm))
       case (None,a)      => (a,List[ithmF.IThm]())
     }
   }
 
-  lazy val actives: Stream[activeF.Active]   = initActive #:: adeduced.map(_._1)
-  lazy val deduced: Stream[List[ithmF.IThm]] = adeduced.map(_._2)
+  /** The active sets. */
+  lazy val actives: Stream[activeF.Active]   =
+    initActive #:: actives_deduced.map(_._1)
 
-  lazy val wpulled:
+  /** The generations of theorems deduced by the active sets. */
+  lazy val deduced: Stream[List[ithmF.IThm]] = actives_deduced.map(_._2)
+
+  private lazy val waitings_nexts:
       Stream[(waitingF.Waiting,Option[(Double,ithmF.IThm)])] = {
-    waitings1.map { case (_,w) =>
+    waitingsAdded.map { case (_,w) =>
       val wpull = w.remove
       (wpull.map(_._1).getOrElse(w), wpull.map(_._2))
     }
   }
-  lazy val waitings2 = wpulled.map(_._1)
-  lazy val dpulled   = wpulled.map(_._2).map(unzipOption(_))
-  lazy val distances: Stream[Option[Double]]     = dpulled.map(_._1)
-  lazy val pulled:    Stream[Option[ithmF.IThm]] = dpulled.map(_._2)
 
-  def zipWith[A,B,C](
+  /** The waiting sets immediately after a theorem is selected for resolution. */
+  lazy val waitingsRemoved = waitings_nexts.map(_._1)
+
+  /** The theorems selected for resolution, together with their assigned distance. */
+  lazy val distance_nextThms = waitings_nexts.map(_._2).map(unzipOption(_))
+
+  private lazy val distances: Stream[Option[Double]]     =
+    distance_nextThms.map(_._1)
+  private lazy val nextThms:    Stream[Option[ithmF.IThm]] =
+    distance_nextThms.map(_._2)
+
+  // TODO: Move into library
+  private def zipWith[A,B,C](
     xs: Stream[A],
     ys: Stream[B])
     (f : (A,B) => C): Stream[C] = {
@@ -75,7 +93,7 @@ case class Resolution[V:Order,F:Order,P:Order,FV,K <: Kernel[V,F,P]](
     }
   }
 
-  def zipWith3[A,B,C,D](
+  private def zipWith3[A,B,C,D](
     xs: Stream[A],
     ys: Stream[B],
     zs: Stream[C])
@@ -85,7 +103,7 @@ case class Resolution[V:Order,F:Order,P:Order,FV,K <: Kernel[V,F,P]](
     }
   }
 
-  def unzipOption[A,B](xy: Option[(A,B)]): (Option[A],Option[B]) = {
+  private def unzipOption[A,B](xy: Option[(A,B)]): (Option[A],Option[B]) = {
     xy match {
       case Some((x,y)) => (Some(x),Some(y))
       case None        => (None,   None)
