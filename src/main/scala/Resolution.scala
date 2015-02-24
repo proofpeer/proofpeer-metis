@@ -76,12 +76,14 @@ case class Resolution[V:Order,F:Order,P:Order,FV,K <: Kernel[V,F,P]](
   lazy val waitingsRemoved = waitings_nexts.map(_._1)
 
   /** The theorems selected for resolution, together with their assigned distance. */
-  lazy val distance_nextThms = waitings_nexts.map(_._2).map(unzipOption(_))
+  lazy val distance_nextThms = waitings_nexts.map(_._2)
+
+  private lazy val distance_nextThms_opt = distance_nextThms.map(unzipOption(_))
 
   private lazy val distances: Stream[Option[Double]]     =
-    distance_nextThms.map(_._1)
+    distance_nextThms_opt.map(_._1)
   private lazy val nextThms:    Stream[Option[ithmF.IThm]] =
-    distance_nextThms.map(_._2)
+    distance_nextThms_opt.map(_._2)
 
   // TODO: Move into library
   private def zipWith[A,B,C](
