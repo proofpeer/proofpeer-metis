@@ -1,0 +1,31 @@
+package proofpeer.metis.testing.tptp.Problems.GRP
+
+import proofpeer.metis.SimpleParse
+import proofpeer.metis.testing.tptp._
+
+object GRP001_PLUS6 {
+  val mainClauses =
+    List(
+      // Name: commutativity
+      // Role: conjecture
+      List("~Product(x0, F1(x0), F1(x0))","~Product(Inverse(F1(x0)), F1(x0), x0)","~Product(F1(x0), x0, F1(x0))","~Product(F1(x0), Inverse(F1(x0)), x0)","~Product(F1(x0), F1(x0), x0)","~Product(F1(x0), F2(x0), x3)","~Product(F2(x0), x3, F4(x0, x3))","~Product(F4(x0, x3), x3, F6(x0, x3))","~Product(F4(x0, x3), F8(x0, x3), F9(x0, x3))","Product(x3, F2(x0), F4(x0, x3))"),
+      List("~Product(x0, F1(x0), F1(x0))","~Product(Inverse(F1(x0)), F1(x0), x0)","~Product(F1(x0), x0, F1(x0))","~Product(F1(x0), Inverse(F1(x0)), x0)","~Product(F1(x0), F1(x0), x0)","~Product(F1(x0), F2(x0), x3)","~Product(F2(x0), x3, F4(x0, x3))","~Product(F4(x0, x3), x3, F6(x0, x3))","Product(x3, F2(x0), F4(x0, x3))","Product(F4(x0, x3), F5(x0, x3), F7(x0, x3))"),
+      List("~Product(x0, F1(x0), F1(x0))","~Product(Inverse(F1(x0)), F1(x0), x0)","~Product(F1(x0), x0, F1(x0))","~Product(F1(x0), Inverse(F1(x0)), x0)","~Product(F1(x0), F1(x0), x0)","~Product(F1(x0), F2(x0), x3)","~Product(F2(x0), x3, F4(x0, x3))","~Product(F4(x0, x3), x3, F6(x0, x3))","Product(x3, F2(x0), F4(x0, x3))","Product(F5(x0, x3), F6(x0, x3), F8(x0, x3))"),
+      List("~Product(x0, F1(x0), F1(x0))","~Product(Inverse(F1(x0)), F1(x0), x0)","~Product(F1(x0), x0, F1(x0))","~Product(F1(x0), Inverse(F1(x0)), x0)","~Product(F1(x0), F1(x0), x0)","~Product(F1(x0), F2(x0), x3)","~Product(F2(x0), x3, F4(x0, x3))","~Product(F4(x0, x3), x3, F6(x0, x3))","Product(x3, F2(x0), F4(x0, x3))","Product(F7(x0, x3), F6(x0, x3), F9(x0, x3))"),
+      List("~Product(x0, F1(x0), F1(x0))","~Product(Inverse(F1(x0)), F1(x0), x0)","~Product(F1(x0), x0, F1(x0))","~Product(F1(x0), Inverse(F1(x0)), x0)","~Product(F1(x0), F1(x0), x0)","~Product(F1(x0), F2(x0), x3)","~Product(F2(x0), x3, F4(x0, x3))","~Product(F4(x0, x3), F8(x0, x3), F9(x0, x3))","Product(x3, F2(x0), F4(x0, x3))","Product(F1(x0), F2(x0), F4(x0, x3))"),
+      List("~Product(x0, F1(x0), F1(x0))","~Product(Inverse(F1(x0)), F1(x0), x0)","~Product(F1(x0), x0, F1(x0))","~Product(F1(x0), Inverse(F1(x0)), x0)","~Product(F1(x0), F1(x0), x0)","~Product(F1(x0), F2(x0), x3)","~Product(F2(x0), x3, F4(x0, x3))","~Product(F4(x0, x3), F8(x0, x3), F9(x0, x3))","Product(x3, F2(x0), F4(x0, x3))","Product(F1(x0), F5(x0, x3), F6(x0, x3))"),
+      List("~Product(x0, F1(x0), F1(x0))","~Product(Inverse(F1(x0)), F1(x0), x0)","~Product(F1(x0), x0, F1(x0))","~Product(F1(x0), Inverse(F1(x0)), x0)","~Product(F1(x0), F1(x0), x0)","~Product(F1(x0), F2(x0), x3)","~Product(F2(x0), x3, F4(x0, x3))","~Product(F4(x0, x3), F8(x0, x3), F9(x0, x3))","Product(x3, F2(x0), F4(x0, x3))","Product(F2(x0), x3, F5(x0, x3))"),
+      List("~Product(x0, F1(x0), F1(x0))","~Product(Inverse(F1(x0)), F1(x0), x0)","~Product(F1(x0), x0, F1(x0))","~Product(F1(x0), Inverse(F1(x0)), x0)","~Product(F1(x0), F1(x0), x0)","~Product(F1(x0), F2(x0), x3)","~Product(F2(x0), x3, F4(x0, x3))","Product(x3, F2(x0), F4(x0, x3))","Product(F1(x0), F2(x0), F4(x0, x3))","Product(F4(x0, x3), F5(x0, x3), F7(x0, x3))"),
+      List("~Product(x0, F1(x0), F1(x0))","~Product(Inverse(F1(x0)), F1(x0), x0)","~Product(F1(x0), x0, F1(x0))","~Product(F1(x0), Inverse(F1(x0)), x0)","~Product(F1(x0), F1(x0), x0)","~Product(F1(x0), F2(x0), x3)","~Product(F2(x0), x3, F4(x0, x3))","Product(x3, F2(x0), F4(x0, x3))","Product(F1(x0), F2(x0), F4(x0, x3))","Product(F5(x0, x3), F6(x0, x3), F8(x0, x3))"),
+      List("~Product(x0, F1(x0), F1(x0))","~Product(Inverse(F1(x0)), F1(x0), x0)","~Product(F1(x0), x0, F1(x0))","~Product(F1(x0), Inverse(F1(x0)), x0)","~Product(F1(x0), F1(x0), x0)","~Product(F1(x0), F2(x0), x3)","~Product(F2(x0), x3, F4(x0, x3))","Product(x3, F2(x0), F4(x0, x3))","Product(F1(x0), F2(x0), F4(x0, x3))","Product(F7(x0, x3), F6(x0, x3), F9(x0, x3))"),
+      List("~Product(x0, F1(x0), F1(x0))","~Product(Inverse(F1(x0)), F1(x0), x0)","~Product(F1(x0), x0, F1(x0))","~Product(F1(x0), Inverse(F1(x0)), x0)","~Product(F1(x0), F1(x0), x0)","~Product(F1(x0), F2(x0), x3)","~Product(F2(x0), x3, F4(x0, x3))","Product(x3, F2(x0), F4(x0, x3))","Product(F1(x0), F5(x0, x3), F6(x0, x3))","Product(F4(x0, x3), F5(x0, x3), F7(x0, x3))"),
+      List("~Product(x0, F1(x0), F1(x0))","~Product(Inverse(F1(x0)), F1(x0), x0)","~Product(F1(x0), x0, F1(x0))","~Product(F1(x0), Inverse(F1(x0)), x0)","~Product(F1(x0), F1(x0), x0)","~Product(F1(x0), F2(x0), x3)","~Product(F2(x0), x3, F4(x0, x3))","Product(x3, F2(x0), F4(x0, x3))","Product(F1(x0), F5(x0, x3), F6(x0, x3))","Product(F5(x0, x3), F6(x0, x3), F8(x0, x3))"),
+      List("~Product(x0, F1(x0), F1(x0))","~Product(Inverse(F1(x0)), F1(x0), x0)","~Product(F1(x0), x0, F1(x0))","~Product(F1(x0), Inverse(F1(x0)), x0)","~Product(F1(x0), F1(x0), x0)","~Product(F1(x0), F2(x0), x3)","~Product(F2(x0), x3, F4(x0, x3))","Product(x3, F2(x0), F4(x0, x3))","Product(F1(x0), F5(x0, x3), F6(x0, x3))","Product(F7(x0, x3), F6(x0, x3), F9(x0, x3))"),
+      List("~Product(x0, F1(x0), F1(x0))","~Product(Inverse(F1(x0)), F1(x0), x0)","~Product(F1(x0), x0, F1(x0))","~Product(F1(x0), Inverse(F1(x0)), x0)","~Product(F1(x0), F1(x0), x0)","~Product(F1(x0), F2(x0), x3)","~Product(F2(x0), x3, F4(x0, x3))","Product(x3, F2(x0), F4(x0, x3))","Product(F2(x0), x3, F5(x0, x3))","Product(F4(x0, x3), F5(x0, x3), F7(x0, x3))"),
+      List("~Product(x0, F1(x0), F1(x0))","~Product(Inverse(F1(x0)), F1(x0), x0)","~Product(F1(x0), x0, F1(x0))","~Product(F1(x0), Inverse(F1(x0)), x0)","~Product(F1(x0), F1(x0), x0)","~Product(F1(x0), F2(x0), x3)","~Product(F2(x0), x3, F4(x0, x3))","Product(x3, F2(x0), F4(x0, x3))","Product(F2(x0), x3, F5(x0, x3))","Product(F5(x0, x3), F6(x0, x3), F8(x0, x3))"),
+      List("~Product(x0, F1(x0), F1(x0))","~Product(Inverse(F1(x0)), F1(x0), x0)","~Product(F1(x0), x0, F1(x0))","~Product(F1(x0), Inverse(F1(x0)), x0)","~Product(F1(x0), F1(x0), x0)","~Product(F1(x0), F2(x0), x3)","~Product(F2(x0), x3, F4(x0, x3))","Product(x3, F2(x0), F4(x0, x3))","Product(F2(x0), x3, F5(x0, x3))","Product(F7(x0, x3), F6(x0, x3), F9(x0, x3))")).
+    map(_.map(SimpleParse.parse(_).get))
+
+  def clauses =
+    this.mainClauses
+}
