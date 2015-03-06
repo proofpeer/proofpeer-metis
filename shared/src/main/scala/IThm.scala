@@ -198,7 +198,7 @@ case class IThmFactory[V:Order,F:Order,P:Order,FV,K<:Kernel[V,F,P]](
         kernel.resolve(literal,top,kernel.sym(eql.l,eql.r)).getOrBug("topRewrite")
     }
 
-      kernel.sym(lhs,rhs)
+    kernel.sym(lhs,rhs)
 
     def lhs = lr._1
     def rhs = lr._2

@@ -35,7 +35,7 @@ class ResolutionSpec extends FlatSpec {
     val interpretation = Interpretation[String,String,String](1000,vals)
     val sys = new Resolution(0,clauses,ithmF,interpretation)
     val pulls      = sys.distance_nextThms.takeWhile {
-      thm2 => !(thm2._2.get.isContradiction) }
+      thm2 => !(thm2.get._2.isContradiction) }
     val pullsLimit = pulls.take(((tolerance + 1) * expectedSteps + 1).toInt)
     val noSteps    = pullsLimit.length
     val discrepancy    = Math.abs(noSteps - expectedSteps)

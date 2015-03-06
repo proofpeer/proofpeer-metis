@@ -60,10 +60,16 @@ trait GenTerm[V,T,C <: GenCursor[V,T,GT,C],GT] { this: GT =>
 
   def unify(θ: Subst[V,T], term: GT)(implicit ev: Order[V]): List[Subst[V,T]]
 
-  def allSubterms: List[C]
+  def tops: List[C]
+
+  def allSubterms: List[C] =
+    for (
+      t   <- tops;
+      c   <- t.allSubterms)
+    yield c
 }
 
-trait GenCursor[V,T,GT,C] { this: C =>
+trait GenCursor[V,T,GT,C <: GenCursor[V,T,GT,C]] { this: C =>
   /** Substitute across the whole term, preserving the cursor. */
   def substTop(θ: Subst[V,T])(implicit ev: Order[V]): C
 
@@ -75,4 +81,13 @@ trait GenCursor[V,T,GT,C] { this: C =>
 
   /** Replace the term under the cursor. */
   def replaceWith(T: T): GT
+
+  def children: List[C]
+
+  def allSubterms: List[C] = {
+    for (
+      child <- this.children;
+      c     <- child.allSubterms)
+    yield c
+  }
 }

@@ -10,17 +10,17 @@ object Term {
   case class TermCursor[V,F] private[Term] (
     top: Term[V,F],
     cursorTerm: Term[V,F],
-    path: List[Int]) extends GenCursor[V,Term[V,F],Term[V,F],TermCursor[V,F]] {
+    path: Vector[Int]) extends GenCursor[V,Term[V,F],Term[V,F],TermCursor[V,F]] {
 
     override def get = cursorTerm
 
     private def replaceAt(
       term: Term[V,F],
       replacement: Term[V,F],
-      path: List[Int]): Term[V,F] = {
+      path: Vector[Int]): Term[V,F] = {
       (term,path) match {
-        case (_,List())           => replacement
-        case (Fun(f,args), n::ns) =>
+        case (_,Vector())           => replacement
+        case (Fun(f,args), n +: ns) =>
           args.splitAt(n) match {
             case (pre,arg::sucs) =>
               Fun(f,pre ++ (replaceAt(arg,replacement,ns)::sucs))
@@ -36,6 +36,14 @@ object Term {
 
     override def substTop(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]) =
       new TermCursor(top.subst(θ),cursorTerm.subst(θ),path)
+
+    override def children =
+      top match {
+        case Fun(_,args) =>
+          for ((arg,i) <- args.zipWithIndex)
+          yield new Term.TermCursor(top,arg,this.path :+ i)
+        case _           => List()
+      }
   }
 }
 
@@ -137,16 +145,9 @@ abstract sealed class Term[V,F]
     }
   }
 
-  override def allSubterms: List[Term.TermCursor[V,F]] = {
-    new Term.TermCursor(this,this,List()) :: (this match {
-      case Fun(_,args) =>
-        for (
-          (arg,i) <- args.zipWithIndex;
-          cursor  <- arg.allSubterms)
-        yield new Term.TermCursor(this,cursor.get,i::cursor.path)
-      case _           => List()
-    })
-  }
+  def cursor: Term.TermCursor[V,F] = new Term.TermCursor(this,this,Vector())
+
+  override def tops: List[Term.TermCursor[V,F]] = List(cursor)
 }
 
 case class Var[V,F](v: V) extends Term[V,F]

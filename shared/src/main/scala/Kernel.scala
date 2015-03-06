@@ -2,6 +2,7 @@ package proofpeer.metis
 
 import ClauseInstances._
 import proofpeer.metis.util.Fun._
+import proofpeer.metis.util.RichIterable
 import scala.language.higherKinds
 import scala.language.implicitConversions
 import scalaz._
@@ -21,9 +22,9 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
   case class Refl() extends Inference
   case class Sym() extends Inference
   case class Trans[V,F,P](xy: Thm, yz: Thm) extends Inference
-  case class Equality[V,F,P](p: List[Int], lit: Literal[V,F,P]) extends Inference
+  case class Equality[V,F,P](p: Vector[Int], lit: Literal[V,F,P]) extends Inference
   case class RemoveSym[V,F,P](thm: Thm) extends Inference
-  case class Conv[V,F,P](thm: List[Thm]) extends Inference
+  case class Conv[V,F,P](literal: Literal[V,F,P], thm: List[Thm]) extends Inference
   case class InfSubst(θ: Subst[V,Term[V,F]], thm: Thm) extends Inference
   case class Resolve[V,F,P](pos: Thm, neg: Thm) extends Inference
   case class Irreflexive[V,F,P](thm: Thm) extends Inference
@@ -97,7 +98,7 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
   def refl(tm: Term[V,F]) = Thm(Clause(Set(Literal(true,Eql(tm,tm)))),Refl())
 
   /**  L ∨ C      M ∨ D
-    *  ------------------ resolve L, where M is the negation of L.
+    *  ---------------- resolve L, where M is the negation of L.
     *       C ∨ D
     */
   def resolve(lit: Literal[V,F,P], thm1: Thm, thm2: Thm): Option[Thm] = {
@@ -126,15 +127,19 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
       Equality(lit.path,lit.top))
   }
 
-  // Derived rules in Hurd. Primitive here.
-  // ======================================
+  // Derived rules
+  // =============
 
   /** ---------------------- sym x y
     *    ¬(x = y) ∨ (y = x)
     */
   def sym(x: Term[V,F], y: Term[V,F]) = {
-    val cl = Clause(Set(Literal(false,Eql[V,F,P](x,y)),Literal(true,Eql[V,F,P](y,x))))
-    Thm(Clause(cl),Sym())
+    val xx = refl(x);
+    val xxLit = (xx.clause.headOption >>= (_.lhs)).getOrElse(
+      throw new Exception("Refl should produce an equality"))
+    val yx = equality(xxLit,y)
+    resolve(xxLit.top,xx,yx).getOrElse(
+      throw new Exception("Sym"))
   }
 
   // Write out a set of dependencies and a possible final clause containing
@@ -195,7 +200,7 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
   }
 
   /**
-    *  -------------, P' repeatTopDownConv P conv
+    *  -------------, repeatTopDownConv P conv
     *   ~P v P' v C
     *
     *  where P' is the result of repeatedly traversing P, applying the
@@ -213,7 +218,7 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
     lits.map { lits =>
       (Thm(
         Clause(lits + Literal(!isPositive,atom) + Literal(isPositive,newAtom)),
-        Conv(deps.toList)),
+        Conv(lit, deps.toList)),
         Literal(lit.isPositive,newAtom))
     }
   }

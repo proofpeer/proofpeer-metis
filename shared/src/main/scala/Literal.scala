@@ -24,6 +24,8 @@ object Literal {
       val lit_    = Literal(top.isPositive,cursor_.top)
       new TermCursor(lit_,cursor_)
     }
+    override def children =
+      this.cursor.children.map(new TermCursor(this.top,_))
   }
 }
 
@@ -55,11 +57,15 @@ case class Literal[V,F,P](isPositive: Boolean, atom: Atom[V,F,P])
     else List()
   override def heuristicSize = atom.heuristicSize
 
-  override def allSubterms =
-    atom.allSubterms.map { new Literal.TermCursor(this,_) }
+  override def tops = atom.tops.map { new Literal.TermCursor(this,_) }
 
   /** Is this literal of the form x=x? */
   def isRefl = isPositive && atom.isRefl
+
+  def lhs: Option[Literal.TermCursor[V,F,P]] =
+    this.atom.lhs.map(new Literal.TermCursor(this,_))
+  def rhs: Option[Literal.TermCursor[V,F,P]] =
+    this.atom.rhs.map(new Literal.TermCursor(this,_))
 }
 
 trait LiteralOrdering[V,F,P] {

@@ -1,7 +1,7 @@
 package proofpeer.metis.util
 import scala.collection.Set
 import scala.collection.IterableLike
-import scala.collection.TraversableLike
+import scala.collection.GenTraversableLike
 import scala.collection.generic.CanBuildFrom
 import scala.language.higherKinds
 import scalaz._
@@ -33,8 +33,8 @@ class RichIterable[A, This](xs: IterableLike[A,This]) {
   }
 }
 
-class RichTraversable[A, That, This <: TraversableLike[A,That]](
-  xs: TraversableLike[A,This]) {
+class RichTraversable[A, That, This <: GenTraversableLike[A,That]](
+  xs: GenTraversableLike[A,This]) {
   def singleton = {
     val (head,tail) = xs.splitAt(1)
     head.headOption.filter(_ => tail.isEmpty)
@@ -57,8 +57,8 @@ object RichCollectionInstances {
     implicit ev:ApplicativePlus[F]) {
     new RichFoldable(xs)
   }
-  implicit def toRichTraversable[A,That,This <: TraversableLike[A,That]](
-    xs: TraversableLike[A,This]) =
+  implicit def toRichGenTraversable[A,That,This <: GenTraversableLike[A,That]](
+    xs: GenTraversableLike[A,This]) =
     new RichTraversable[A,That,This](xs)
   implicit def setToRichTraversable[A](xs: Set[A]) =
     new RichTraversable[A,Set[A],Set[A]](xs)

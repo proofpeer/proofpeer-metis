@@ -45,6 +45,9 @@ object Clause {
         case _ => throw new Error("Bug: No such subterm.")
       }
     }
+
+    def children =
+      literalCursor.children.map(new TermCursor(this.top,this.pos,_))
   }
 }
 
@@ -91,10 +94,10 @@ case class Clause[V,F,P](lits: Set[Literal[V,F,P]])
   }
   override def heuristicSize = lits.toList.map(_.heuristicSize).sum
 
-  override def allSubterms =
+  override def tops =
     for (
       (lit,n) <- lits.toList.zipWithIndex;
-      cursor  <- lit.allSubterms)
+      cursor  <- lit.tops)
     yield new Clause.TermCursor(this,n,cursor)
 
   implicit def atomOrder(implicit ordV: Order[V], ordF: Order[F], ordP: Order[P]) =

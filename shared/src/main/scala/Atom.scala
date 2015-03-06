@@ -9,7 +9,7 @@ import TermInstances._
 object Atom {
   sealed trait TermCursor[V,F,P]
       extends GenCursor[V,Term[V,F],Atom[V,F,P],TermCursor[V,F,P]] {
-    def path: List[Int]
+    def path: Vector[Int]
   }
 
   case class PredCursor[V,F,P] private[Atom](
@@ -18,7 +18,7 @@ object Atom {
     cursor: Term.TermCursor[V,F]) extends TermCursor[V,F,P] {
 
     /** Argument path from theTop to the cursor. */
-    def path = pos::cursor.path
+    def path = pos +: cursor.path
 
     override def get = cursor.get
     override def replaceWith(replacement: Term[V,F]): Pred[V,F,P] = {
@@ -42,13 +42,17 @@ object Atom {
         case _ => throw new Error("Bug: No such subterm.")
       }
     }
+
+    override def children =
+      this.cursor.children.map(new PredCursor(this.top,this.pos,_))
+
   }
 
   case class LHSCursor[V,F,P] private[Atom](
     top: Eql[V,F,P],
     cursor: Term.TermCursor[V,F]) extends TermCursor[V,F,P] {
 
-    override def path = 0::cursor.path
+    override def path = 0 +: cursor.path
     override def get = cursor.get
     override def replaceWith(replacement: Term[V,F]): Eql[V,F,P] =
       Eql(cursor.replaceWith(replacement),top.r)
@@ -59,12 +63,15 @@ object Atom {
       val rhs_    = top.r.subst(θ)
       new LHSCursor(Eql[V,F,P](lhs_,rhs_),cursor_)
     }
+
+    override def children =
+      this.cursor.children.map(new LHSCursor(this.top,_))
   }
 
   case class RHSCursor[V,F,P] private[Atom](
     top: Eql[V,F,P],
     cursor: Term.TermCursor[V,F]) extends TermCursor[V,F,P] {
-    override def path = 1::cursor.path
+    override def path = 1 +: cursor.path
     override def get = cursor.get
     override def replaceWith(replacement: Term[V,F]): Eql[V,F,P] =
       Eql(top.l,cursor.replaceWith(replacement))
@@ -75,6 +82,8 @@ object Atom {
       val rhs_    = cursor_.top
       new RHSCursor(Eql[V,F,P](lhs_,rhs_),cursor_)
     }
+    override def children =
+      this.cursor.children.map(new RHSCursor(this.top,_))
   }
 }
 
@@ -137,15 +146,15 @@ abstract sealed class Atom[V,F,P]
     case Eql(x,y)     => x.heuristicSize + y.heuristicSize
   })
 
-  override def allSubterms = {
+  override def tops = {
     this match {
       case eq@Eql(x,y) =>
-        x.allSubterms.map { new Atom.LHSCursor(eq,_) } ++
-        y.allSubterms.map { new Atom.RHSCursor(eq,_) }
+        x.tops.map { new Atom.LHSCursor(eq,_) } ++
+        y.tops.map { new Atom.RHSCursor(eq,_) }
       case atm@Pred(p,args) =>
         for (
           (arg,n) <- args.zipWithIndex;
-          cursor  <- arg.allSubterms)
+          cursor  <- arg.tops)
         yield new Atom.PredCursor(atm,n,cursor)
     }
   }
@@ -154,6 +163,17 @@ abstract sealed class Atom[V,F,P]
     case Eql(l,r) => l == r
     case _        => false
   }
+
+  def lhs: Option[Atom.TermCursor[V,F,P]] =
+    this match {
+      case eq@Eql(x,_) => Some(new Atom.LHSCursor(eq,x.cursor))
+      case _ => None
+    }
+  def rhs: Option[Atom.TermCursor[V,F,P]] =
+    this match {
+      case eq@Eql(_,y) => Some(new Atom.LHSCursor(eq,y.cursor))
+      case _ => None
+    }
 }
 
 /** Predications P(...args...) */

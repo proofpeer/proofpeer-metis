@@ -94,10 +94,11 @@ case class METISRewriting[V:Order,F:Order,P,FV,K<:Kernel[V,F,P]](kernel: K)(
 
   // Cursors into terms in an equation.
   abstract sealed class Cursor {
-    private def followTermPath(tm: Term[V,F], path: List[Int]): Option[Term[V,F]] = {
+    private def followTermPath(tm: Term[V,F], path: Vector[Int]):
+        Option[Term[V,F]] = {
       (tm,path) match {
-        case (_,List()) => Some(tm)
-        case (Fun(_,args),n::path_) =>
+        case (_,Vector()) => Some(tm)
+        case (Fun(_,args),n +: path_) =>
           args.lift(n) >>= (followTermPath(_,path_))
         case _ => None
       }
