@@ -137,6 +137,11 @@ object ClauseInstances {
   implicit def toRichIterable[V,F,P](cl: Clause[V,F,P]) =
     new RichIterable(cl.lits)
   implicit def toSet[V,F,P](cl: Clause[V,F,P]) = cl.lits
+  import LiteralInstances._
+  implicit def ClauseIsShow[V:Show,F:Show,P:Show] = new Show[Clause[V,F,P]] {
+    override def show(clause: Clause[V,F,P]) =
+      Cord("Clause(") ++ Cord.mkCord(",",clause.lits.toSeq.map(_.show):_*) ++ ")"
+    }
 }
 
 

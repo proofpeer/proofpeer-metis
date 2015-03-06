@@ -119,6 +119,6 @@ object LiteralInstances {
 
   implicit def Show[V:Show,F:Show,P:Show] = new Show[Literal[V,F,P]] {
     override def show(lit: Literal[V,F,P]) =
-      if (!lit.isPositive) Cord("~") else ∅[Cord] ++ lit.atom.show
+      (if (!lit.isPositive) Cord("~") else ∅[Cord]) ++ lit.atom.show
   }
 }

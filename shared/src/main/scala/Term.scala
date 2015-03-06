@@ -38,7 +38,7 @@ object Term {
       new TermCursor(top.subst(θ),cursorTerm.subst(θ),path)
 
     override def children =
-      top match {
+      cursorTerm match {
         case Fun(_,args) =>
           for ((arg,i) <- args.zipWithIndex)
           yield new Term.TermCursor(top,arg,this.path :+ i)

@@ -1,8 +1,8 @@
 package proofpeer.metis
 
 import ClauseInstances._
+import LiteralInstances._
 import proofpeer.metis.util.Fun._
-import proofpeer.metis.util.RichIterable
 import scala.language.higherKinds
 import scala.language.implicitConversions
 import scalaz._
@@ -102,14 +102,9 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
     *       C ∨ D
     */
   def resolve(lit: Literal[V,F,P], thm1: Thm, thm2: Thm): Option[Thm] = {
-   // System.out.println("Resolve on:" + Debug.stringClause(Set(lit)))
-   // System.out.println("Res1: " + Debug.stringClause(thm1.clause.lits))
-   // System.out.println("Res2: " + Debug.stringClause(thm2.clause.lits))
     val negLit = lit.negate
-    // Could push check onto caller for possible optimisation
     if (thm1.clause.contains(lit) && thm2.clause.contains(negLit)) {
       val cl = (thm1.clause - lit) ++ (thm2.clause - negLit)
-     // System.out.println("Resolvent: " + Debug.stringClause(cl))
       Some(Thm(Clause(cl), Resolve(thm1,thm2)))
     }
     else None
@@ -138,8 +133,11 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
     val xxLit = (xx.clause.headOption >>= (_.lhs)).getOrElse(
       throw new Exception("Refl should produce an equality"))
     val yx = equality(xxLit,y)
-    resolve(xxLit.top,xx,yx).getOrElse(
-      throw new Exception("Sym"))
+    val foo =
+      resolve(xxLit.top,xx,yx).getOrElse(
+        throw new Exception("Sym"))
+    Debug.debugShowsClause(foo.clause)
+    foo
   }
 
   // Write out a set of dependencies and a possible final clause containing
@@ -147,7 +145,8 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
   type W[A] = Writer[(Set[Thm],Option[Set[Literal[V,F,P]]]),A]
 
   def convRule(conv: Term[V,F] => Option[(Term[V,F],Thm)]):
-      Term[V,F] => W[Option[Term[V,F]]] = tm =>
+      Term[V,F] => W[Option[Term[V,F]]] = tm => {
+  import proofpeer.metis.util.RichCollectionInstances._
   conv(tm) match {
     case None => none.point[W]
     case Some((newTm,thm)) =>
@@ -155,9 +154,13 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
       // conversions with unit equalities, we'll regard it as a bug if a non-unit
       // equality is used.
       val eql = Literal[V,F,P](true,Eql(tm,newTm))
-      if (thm.clause.lits == Set(eql))
-        newTm.some.point[W] :++> ((Set(thm),some(thm.clause - eql)))
-      else throw new IllegalArgumentException("Invalid conversion")
+      thm.clause.lits.singleton match {
+        case Some(lit) if lit == eql =>
+          newTm.some.point[W] :++> ((Set(thm),some(thm.clause - eql)))
+        case _ =>
+          throw new IllegalArgumentException("Invalid conversion")
+      }
+  }
   }
 
   private def tryRepeatTopDownConv(

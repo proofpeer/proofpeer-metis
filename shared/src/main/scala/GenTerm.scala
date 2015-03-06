@@ -84,10 +84,9 @@ trait GenCursor[V,T,GT,C <: GenCursor[V,T,GT,C]] { this: C =>
 
   def children: List[C]
 
-  def allSubterms: List[C] = {
+  def allSubterms: List[C] =
     for (
       child <- this.children;
       c     <- child.allSubterms)
     yield c
-  }
 }
