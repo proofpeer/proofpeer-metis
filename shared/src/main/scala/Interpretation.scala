@@ -205,17 +205,6 @@ case class Interpretation[V,F,P](
     }
   }
 
-  def splits[A](xs: List[A]) = {
-    def f(pre: List[A], xs: List[A], acc: List[(List[A],A,List[A])]):
-        List[(List[A],A,List[A])] = {
-      xs match {
-        case List() => acc
-        case y::ys  => f(y::pre, ys, (pre,y,ys)::acc)
-      }
-    }
-    f(List(), xs, List())
-  }
-
   def valueModelTerm(term: Term[valsF.fin.Fin,(F,valsF.fin.Fin)]) = {
     term match {
       case Var(n)       => n
@@ -253,7 +242,7 @@ case class Interpretation[V,F,P](
       case Var(_) => List[Perturbation]().point[M]
       case Fun((f,_),args) =>
         val argVals = args.map(valueModelTerm)
-        splits(argVals).reverse.zip(args).traverseM {
+        util.Fun.splits(argVals).reverse.zip(args).traverseM {
           case ((pre,v,suf),arg) =>
             val vs = valsF.fin.filterM[M] { v_ =>
               if (v == v_)

@@ -1,5 +1,6 @@
 package proofpeer.metis
 
+import util.Fun._
 import scala.collection.immutable._
 import scalaz._
 import Scalaz._
@@ -48,45 +49,59 @@ object Subst {
   * @tparam GT concrete type
   * @tparam type of subterms
   */
-trait GenTerm[V,T,C <: GenCursor[V,T,GT,C],GT] { this: GT =>
+trait GenTerm[V,T,GT] { this: GT =>
   def frees: Set[V]
   def freeIn(v: V): Boolean
   def subst(θ: Subst[V,T])(implicit ev: Order[V]): GT
 
   def heuristicSize: Int
+}
 
+trait MatchableTerm[V,T,GT] { this: GT =>
   /** Treat this term as a pattern and match it against term. */
   def patMatch(θ: Subst[V,T], term: GT)(implicit ev: Order[V]): List[Subst[V,T]]
-
   def unify(θ: Subst[V,T], term: GT)(implicit ev: Order[V]): List[Subst[V,T]]
+}
 
+trait Cursored[V,T,GT,C <: GenCursor[V,T,GT,C]] { this: GT =>
   def tops: List[C]
 
   def allSubterms: List[C] =
     for (
-      t   <- tops;
-      c   <- t.allSubterms)
+      t <- tops;
+      c <- t.allSubterms)
     yield c
 }
 
 trait GenCursor[V,T,GT,C <: GenCursor[V,T,GT,C]] { this: C =>
-  /** Substitute across the whole term, preserving the cursor. */
-  def substTop(θ: Subst[V,T])(implicit ev: Order[V]): C
-
   /** The term under the cursor. */
   def get: T
 
   /** The term under the top cursor */
   def top: GT
 
-  /** Replace the term under the cursor. */
-  def replaceWith(T: T): GT
+  def up: Option[C]
 
-  def children: List[C]
+  def down: Option[C]
+
+  def left: Option[C]
+
+  def right: Option[C]
+
+  def children: List[C] = {
+    down.toList >>= (loopCollect(_)(c => c.right))
+  }
+
+  def path: Vector[Int]
+
+  /** Replace the term under the cursor. */
+  def replaceWith(T: T): C
+
+  def subst(θ: Subst[V,T])(implicit ev: Order[V]): C
 
   def allSubterms: List[C] =
-    for (
-      child <- this.children;
+    this :: (for (
+      child <- children;
       c     <- child.allSubterms)
-    yield c
+    yield c)
 }

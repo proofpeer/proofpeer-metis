@@ -8,24 +8,22 @@ import Scalaz._
 
 object Literal {
   case class TermCursor[V,F,P] private[Literal] (
-    top: Literal[V,F,P],
+    isPositive: Boolean,
     cursor: Atom.TermCursor[V,F,P])
       extends GenCursor[V,Term[V,F],Literal[V,F,P],TermCursor[V,F,P]] {
 
     /** Argument path from theTop to the cursor. */
     def path = cursor.path
     override def get = cursor.get
-
-    override def replaceWith(replacement: Term[V,F]): Literal[V,F,P] =
-      new Literal(top.isPositive,cursor.replaceWith(replacement))
-
-    override def substTop(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]) = {
-      val cursor_ = cursor.substTop(θ)
-      val lit_    = Literal(top.isPositive,cursor_.top)
-      new TermCursor(lit_,cursor_)
-    }
-    override def children =
-      this.cursor.children.map(new TermCursor(this.top,_))
+    override def replaceWith(replacement: Term[V,F]) =
+      TermCursor(isPositive,cursor.replaceWith(replacement))
+    override def subst(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]) =
+      TermCursor(isPositive,cursor.subst(θ))
+    override def down  = cursor.down.map(TermCursor(isPositive,_))
+    override def up    = cursor.up.map(TermCursor(isPositive,_))
+    override def left  = cursor.left.map(TermCursor(isPositive,_))
+    override def right = cursor.right.map(TermCursor(isPositive,_))
+    override def top   = Literal(isPositive,cursor.top)
   }
 }
 
@@ -38,7 +36,9 @@ object Literal {
   * @param isPositive Is this a non-negated atomic formula?
   */
 case class Literal[V,F,P](isPositive: Boolean, atom: Atom[V,F,P])
-    extends GenTerm[V,Term[V,F],Literal.TermCursor[V,F,P],Literal[V,F,P]] {
+    extends GenTerm[V,Term[V,F],Literal[V,F,P]]
+    with MatchableTerm[V,Term[V,F],Literal[V,F,P]]
+    with Cursored[V,Term[V,F],Literal[V,F,P],Literal.TermCursor[V,F,P]] {
   def negate() = Literal(!this.isPositive, this.atom)
 
   override def frees = atom.frees
@@ -57,15 +57,10 @@ case class Literal[V,F,P](isPositive: Boolean, atom: Atom[V,F,P])
     else List()
   override def heuristicSize = atom.heuristicSize
 
-  override def tops = atom.tops.map { new Literal.TermCursor(this,_) }
+  override def tops = atom.tops.map { new Literal.TermCursor(this.isPositive,_) }
 
   /** Is this literal of the form x=x? */
   def isRefl = isPositive && atom.isRefl
-
-  def lhs: Option[Literal.TermCursor[V,F,P]] =
-    this.atom.lhs.map(new Literal.TermCursor(this,_))
-  def rhs: Option[Literal.TermCursor[V,F,P]] =
-    this.atom.rhs.map(new Literal.TermCursor(this,_))
 }
 
 trait LiteralOrdering[V,F,P] {

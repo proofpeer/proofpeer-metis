@@ -5,6 +5,17 @@ import scalaz._
 import Scalaz._
 
 object Fun {
+  def splits[A](xs: List[A]) = {
+    def f(pre: List[A], xs: List[A], acc: List[(List[A],A,List[A])]):
+        List[(List[A],A,List[A])] = {
+      xs match {
+        case List() => acc
+        case y::ys  => f(y::pre, ys, (pre,y,ys)::acc)
+      }
+    }
+    f(List(), xs, List())
+  }
+
   /** f (f (f .. x)) where f is repeated n times.
     Alternatively, the nth Church numeral. */
   def iterate[A](n: Int, x: A)(f: A => A) = {
@@ -31,34 +42,22 @@ object Fun {
   }
 
   /** A generic unfold */
-  def unfold[W:Monoid,A](x: A)(f: A => Option[(A,W)]): W =
+  def unfoldW[W:Monoid,A](x: A)(f: A => Option[(A,W)]): W =
     unfoldM[Id,W,A](x)(f)
 
-  /** Options are monoids favouring the right. */
-  // TODO: This is an orphan instance. Reimplement Option.
-  def RightBias[A] = new Monoid[Option[A]] {
-    def zero = None
-    def append(x: Option[A], y: => Option[A]) =
-      (x,y) match {
-        case (x,None) => x
-        case (_,y)    => y
-      }
+  /** Loop, collecting results. */
+  def loopCollectM[M[_]:Monad,A](x: A)(f: A => M[Option[A]]): M[List[A]] =
+    (unfoldM[M,DList[A],A](x) { x => f(x).map(_.map(x => (x,x +: ∅[DList[A]]))) })
+      .map(_.toList)
+
+  /** Loop, collecting results. */
+  def loopCollect[A](x: A)(f: A => Option[A]): List[A] =
+    (unfoldM[Id,DList[A],A](x) { x => f(x).map(x => (x,x +: ∅[DList[A]])) }).toList
+
+  /** Loop, returning the last defined element. */
+  def loop[A](x: A)(f : A => Option[A]): A = {
+    f(x).map(loop(_)(f)).getOrElse(x)
   }
-
-  /** Try to loop at least once, returning the last defined element. */
-  def loopM1[M[_]:Monad,A](x: A)(f : A => M[Option[A]]): M[Option[A]] = {
-    implicit val RightBiasMonoid = RightBias[A]
-    unfoldM[M,Option[A],A](x) { x => f(x).map(_.map { y => (y, Some(y)) }) }
-  }
-
-  /** Try to loop at least once, returning the last defined element. */
-  def loop1[A](x:A)(f: A => Option[A]): Option[A] =
-    loopM1[Id,A](x)(f)
-
-  def loopM[M[_]:Monad,A](x:A)(f: A => M[Option[A]]): M[A] =
-    loopM1(x)(f).map(_.getOrElse(x))
-
-  def loop[A](x:A)(f: A => Option[A]): A = loopM[Id,A](x)(f)
 
   def existsM[X,M[_]:Monad](xs: Iterator[X])(p: X => M[Boolean]): M[Boolean] = {
     var it = xs

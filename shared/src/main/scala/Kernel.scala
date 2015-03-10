@@ -76,7 +76,7 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
 
     /** Cursors to the subterms of the largest literals in a theorem. */
     def largestSubterms(litOrder: LiteralOrdering[V,F,P]) =
-      this.clause.largestSubterms(litOrder).map(new TermCursor(this,_))
+      this.clause.largestSubterms(litOrder).map(TermCursor(this,_))
   }
 
   /**
@@ -118,89 +118,90 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
   def equality(lit: Literal.TermCursor[V,F,P], t: Term[V,F]) = {
     val s  = lit.get
     val eq = Literal(false,Eql[V,F,P](s,t))
-    Thm(Clause(Set(eq, lit.top.negate, lit.replaceWith(t))),
+    Thm(Clause(Set(eq, lit.top.negate, lit.replaceWith(t).top)),
       Equality(lit.path,lit.top))
   }
 
   // Derived rules
   // =============
+  import proofpeer.metis.util.RichCollectionInstances._
 
   /** ---------------------- sym x y
     *    ¬(x = y) ∨ (y = x)
     */
   def sym(x: Term[V,F], y: Term[V,F]) = {
     val xx = refl(x);
-    val xxLit = (xx.clause.headOption >>= (_.lhs)).getOrElse(
-      throw new Exception("Refl should produce an equality"))
+    val xxLit = (xx.clause.headOption >>= {
+      lit => lit.tops.headOption
+    }).getOrBug(
+      "Refl should produce an equality")
     val yx = equality(xxLit,y)
-    val foo =
-      resolve(xxLit.top,xx,yx).getOrElse(
-        throw new Exception("Sym"))
-    Debug.debugShowsClause(foo.clause)
-    foo
+    resolve(xxLit.top,xx,yx).getOrBug(
+      throw new Exception("Sym"))
   }
 
   // Write out a set of dependencies and a possible final clause containing
   // the final equality and any additional hypotheses.
-  type W[A] = Writer[(Set[Thm],Option[Set[Literal[V,F,P]]]),A]
+  private type ST[M[_],A] = StateT[M, Thm, A]
+  private type M[A]       = ST[Option,A]
 
   def convRule(conv: Term[V,F] => Option[(Term[V,F],Thm)]):
-      Term[V,F] => W[Option[Term[V,F]]] = tm => {
-  import proofpeer.metis.util.RichCollectionInstances._
-  conv(tm) match {
-    case None => none.point[W]
+      Literal.TermCursor[V,F,P] => M[Term[V,F]] = tm => {
+  conv(tm.get) match {
+    case None => mempty[M,Term[V,F]]
     case Some((newTm,thm)) =>
       // TODO: We can be more general than this, but since METIS only does
       // conversions with unit equalities, we'll regard it as a bug if a non-unit
       // equality is used.
-      val eql = Literal[V,F,P](true,Eql(tm,newTm))
+      val eql = equality(tm,newTm)
       thm.clause.lits.singleton match {
         case Some(lit) if lit == eql =>
-          newTm.some.point[W] :++> ((Set(thm),some(thm.clause - eql)))
+          resolve(lit,thm,eql).getOrBug("convRulhould resolve.")
+          newTm.point[M]
         case _ =>
           throw new IllegalArgumentException("Invalid conversion")
       }
   }
   }
 
-  private def tryRepeatTopDownConv(
-    tm: Term[V,F],
-    conv: (Term[V,F] => W[Option[Term[V,F]]])): W[Option[Term[V,F]]] = {
-    val topConv = loopM1[W,Term[V,F]](tm)(conv)
-    val depthConv: W[Option[Term[V,F]]] = topConv >>= { rewriteTop =>
-      val newTopTm = rewriteTop.getOrElse(tm)
-      newTopTm match {
-        case Fun(f,args) =>
-          args.traverse(tryRepeatTopDownConv(_,conv)) >>= { newArgs =>
-            val changed = newArgs.exists(_.isDefined)
-            if (!changed)
-              none.point[W]
-            else
-              repeatTopDownConv(
-                Fun(f,(newArgs,args).zipped.map { _.getOrElse(_) }),
-                conv).map(_.some)
-          }
-        case _ => none.point[W]
-      }
-    }
-    (depthConv |@| topConv) { _.orElse(_) }
-  }
+  // private def tryRepeatTopDownConv(
+  //   tm: Term[V,F],
+  //   conv: (Term[V,F] => W[Option[Term[V,F]]])): W[Option[Term[V,F]]] = {
+  //   val topConv = loopM1[W,Term[V,F]](tm)(conv)
+  //   val depthConv: W[Option[Term[V,F]]] = topConv >>= { rewriteTop =>
+  //     val newTopTm = rewriteTop.getOrElse(tm)
+  //     newTopTm match {
+  //       case Fun(f,args) =>
+  //         args.traverse(tryRepeatTopDownConv(_,conv)) >>= { newArgs =>
+  //           val changed = newArgs.exists(_.isDefined)
+  //           if (!changed)
+  //             none.point[W]
+  //           else
+  //             repeatTopDownConv(
+  //               Fun(f,(newArgs,args).zipped.map { _.getOrElse(_) }),
+  //               conv).map(_.some)
+  //         }
+  //       case _ => none.point[W]
+  //     }
+  //   }
+  //   (depthConv |@| topConv) { _.orElse(_) }
+  // }
 
-  private def repeatTopDownConv(
-    tm: Term[V,F],
-    conv: (Term[V,F] => W[Option[Term[V,F]]])): W[Term[V,F]] =
-    tryRepeatTopDownConv(tm, conv).map { _.getOrElse(tm) }
+  // private def repeatTopDownConv(
+  //   tm: Term[V,F],
+  //   conv: (Term[V,F] => W[Option[Term[V,F]]])): W[Term[V,F]] =
+  //   tryRepeatTopDownConv(tm, conv).map { _.getOrElse(tm) }
 
-  private def repeatTopDownConvAtom(
-    atm: Atom[V,F,P],
-    conv: Term[V,F] => W[Option[Term[V,F]]]): W[Atom[V,F,P]] = {
-    atm match {
-      case Eql(x,y) =>
-        (repeatTopDownConv(x,conv) |@| repeatTopDownConv(y,conv)) { Eql(_,_) }
-      case Pred(p,args) =>
-        args.traverse(repeatTopDownConv(_,conv)).map { Pred(p,_) }
-    }
-  }
+  // private def repeatTopDownConvAtom(
+  //   atm: Atom[V,F,P],
+  //   conv: Term[V,F] => W[Option[Term[V,F]]]): W[Atom[V,F,P]] = {
+  //   atm match {
+  //     case Eql(x,y) =>
+  //       (repeatTopDownConv(x,conv) |@| repeatTopDownConv(y,conv)) { Eql(_,_) }
+  //     case Pred(p,args) =>
+  //       args.traverse(repeatTopDownConv(_,conv)).map { Pred(p,_) }
+  //   }
+  // }
 
   /**
     *  -------------, repeatTopDownConv P conv
@@ -212,18 +213,19 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
     */
   def repeatTopDownConvRule(
     lit:  Literal[V,F,P],
-    conv: Term[V,F] => Option[(Term[V,F], Thm)]) = {
+    conv: Term[V,F] => Option[(Term[V,F], Thm)]): Option[(Thm,Literal[V,F,P])] = {
 
-    val isPositive = lit.isPositive
-    val atom       = lit.atom
-    val ((deps,lits),newAtom) = repeatTopDownConvAtom(atom,convRule(conv)).run
+    null
+    // val isPositive = lit.isPositive
+    // val atom       = lit.atom
+    // val ((deps,lits),newAtom) = repeatTopDownConvAtom(atom,convRule(conv)).run
 
-    lits.map { lits =>
-      (Thm(
-        Clause(lits + Literal(!isPositive,atom) + Literal(isPositive,newAtom)),
-        Conv(lit, deps.toList)),
-        Literal(lit.isPositive,newAtom))
-    }
+    // lits.map { lits =>
+    //   (Thm(
+    //     Clause(lits + Literal(!isPositive,atom) + Literal(isPositive,newAtom)),
+    //     Conv(lit, deps.toList)),
+    //     Literal(lit.isPositive,newAtom))
+    // }
   }
 
   /** Wrap a clause cursor to a subterm. */
@@ -233,9 +235,9 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
 
     def get = clauseCursor.get
     def literal = clauseCursor.literal
-    def substTop(θ: Subst[V,Term[V,F]]) = {
-      val cursor_ = clauseCursor.substTop(θ)
-      new TermCursor(Thm(cursor_.top,InfSubst(θ,top)),cursor_)
+    def subst(θ: Subst[V,Term[V,F]]) = {
+      val cursor_ = clauseCursor.subst(θ)
+      TermCursor(Thm(cursor_.top,InfSubst(θ,top)),cursor_)
     }
   }
 }

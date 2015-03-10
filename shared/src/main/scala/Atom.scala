@@ -8,82 +8,63 @@ import TermInstances._
 
 object Atom {
   sealed trait TermCursor[V,F,P]
-      extends GenCursor[V,Term[V,F],Atom[V,F,P],TermCursor[V,F,P]] {
-    def path: Vector[Int]
-  }
+      extends GenCursor[V,Term[V,F],Atom[V,F,P],TermCursor[V,F,P]]
 
   case class PredCursor[V,F,P] private[Atom](
-    top: Pred[V,F,P],
-    pos: Int,
-    cursor: Term.TermCursor[V,F]) extends TermCursor[V,F,P] {
+    p: P,
+    largs: List[Term[V,F]],
+    cursor: Term.TermCursor[V,F],
+    rargs: List[Term[V,F]]) extends TermCursor[V,F,P] {
 
     /** Argument path from theTop to the cursor. */
-    def path = pos +: cursor.path
+    override def path = cursor.path :+ largs.length
 
     override def get = cursor.get
-    override def replaceWith(replacement: Term[V,F]): Pred[V,F,P] = {
-      top.args.splitAt(pos) match {
-        case (pre,arg::sucs) =>
-          Pred(top.functor,pre ++ (cursor.replaceWith(replacement)::sucs))
-        case _ => throw new Error("Bug: No such subterm.")
-      }
-    }
+    override def replaceWith(replacement: Term[V,F]) =
+      PredCursor(p,largs,cursor.replaceWith(replacement),rargs)
 
-    override def substTop(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]) = {
-      val cursor_ = cursor.substTop(θ)
-      val atm_    = cursor_.top
-      top.args.splitAt(pos) match {
-        case (pre,_::sucs) =>
-          val atm = Pred(
-            top.functor,pre.map(_.subst(θ)) ++
-              (atm_ ::
-                sucs.map(_.subst(θ))))
-          new PredCursor(atm,pos,cursor_)
-        case _ => throw new Error("Bug: No such subterm.")
-      }
-    }
+    override def subst(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]):
+        TermCursor[V,F,P] =
+      PredCursor(p,largs.map(_.subst(θ)), cursor.subst(θ), rargs.map(_.subst(θ)))
 
-    override def children =
-      this.cursor.children.map(new PredCursor(this.top,this.pos,_))
-
+    override def down  = cursor.down.map(PredCursor(p,largs,_,rargs))
+    override def left  = cursor.left.map(PredCursor(p,largs,_,rargs))
+    override def right = cursor.right.map(PredCursor(p,largs,_,rargs))
+    override def up    = cursor.up.map(PredCursor(p,largs,_,rargs))
+    override def top   = Pred(p,largs ++ List(cursor.top) ++ rargs)
   }
 
   case class LHSCursor[V,F,P] private[Atom](
-    top: Eql[V,F,P],
-    cursor: Term.TermCursor[V,F]) extends TermCursor[V,F,P] {
+    cursor: Term.TermCursor[V,F],
+    rhs: Term[V,F]) extends TermCursor[V,F,P] {
 
-    override def path = 0 +: cursor.path
+    override def path = cursor.path :+ 0
     override def get = cursor.get
-    override def replaceWith(replacement: Term[V,F]): Eql[V,F,P] =
-      Eql(cursor.replaceWith(replacement),top.r)
-
-    override def substTop(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]) = {
-      val cursor_ = cursor.substTop(θ)
-      val lhs_    = cursor_.top
-      val rhs_    = top.r.subst(θ)
-      new LHSCursor(Eql[V,F,P](lhs_,rhs_),cursor_)
-    }
-
-    override def children =
-      this.cursor.children.map(new LHSCursor(this.top,_))
+    override def replaceWith(replacement: Term[V,F]) =
+      LHSCursor(cursor.replaceWith(replacement),rhs)
+    override def subst(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]) =
+      new LHSCursor(cursor.subst(θ),rhs.subst(θ))
+    override def down  = cursor.down.map(LHSCursor(_,rhs))
+    override def left  = cursor.left.map(LHSCursor(_,rhs))
+    override def right = cursor.right.map(LHSCursor(_,rhs))
+    override def up    = cursor.up.map(LHSCursor(_,rhs))
+    override def top   = Eql(cursor.top,rhs)
   }
 
   case class RHSCursor[V,F,P] private[Atom](
-    top: Eql[V,F,P],
+    lhs: Term[V,F],
     cursor: Term.TermCursor[V,F]) extends TermCursor[V,F,P] {
-    override def path = 1 +: cursor.path
+    override def path = cursor.path :+ 1
     override def get = cursor.get
-    override def replaceWith(replacement: Term[V,F]): Eql[V,F,P] =
-      Eql(top.l,cursor.replaceWith(replacement))
-
-    override def substTop(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]) = {
-      val cursor_ = cursor.substTop(θ)
-      val lhs_    = top.l.subst(θ)
-      val rhs_    = cursor_.top
-      new RHSCursor(Eql[V,F,P](lhs_,rhs_),cursor_)
-    }
-    override def children =
-      this.cursor.children.map(new RHSCursor(this.top,_))
+    override def replaceWith(replacement: Term[V,F]) =
+      RHSCursor(lhs,cursor.replaceWith(replacement))
+    override def subst(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]) =
+      RHSCursor(lhs.subst(θ),cursor.subst(θ))
+    override def down  = cursor.down.map(RHSCursor(lhs,_))
+    override def left  = cursor.left.map(RHSCursor(lhs,_))
+    override def right = cursor.right.map(RHSCursor(lhs,_))
+    override def up    = cursor.up.map(RHSCursor(lhs,_))
+    override def top   = Eql(lhs,cursor.top)
   }
 }
 
@@ -94,7 +75,9 @@ object Atom {
   * @tparam P The alphabet from which predicate names are drawn
   */
 abstract sealed class Atom[V,F,P]
-    extends GenTerm[V,Term[V,F],Atom.TermCursor[V,F,P],Atom[V,F,P]] {
+    extends GenTerm[V,Term[V,F],Atom[V,F,P]]
+    with MatchableTerm[V,Term[V,F],Atom[V,F,P]]
+    with Cursored[V,Term[V,F],Atom[V,F,P],Atom.TermCursor[V,F,P]] {
 
   override def frees = this match {
     case Pred(_,args) => args.foldLeft(Set[V]()){
@@ -149,13 +132,13 @@ abstract sealed class Atom[V,F,P]
   override def tops = {
     this match {
       case eq@Eql(x,y) =>
-        x.tops.map { new Atom.LHSCursor(eq,_) } ++
-        y.tops.map { new Atom.RHSCursor(eq,_) }
-      case atm@Pred(p,args) =>
+        x.tops.map { Atom.LHSCursor[V,F,P](_,y) } ++
+        y.tops.map { Atom.RHSCursor[V,F,P](x,_) }
+      case Pred(p,args) =>
         for (
-          (arg,n) <- args.zipWithIndex;
-          cursor  <- arg.tops)
-        yield new Atom.PredCursor(atm,n,cursor)
+          (largs,arg,rargs) <- util.Fun.splits(args);
+          cursor            <- arg.tops)
+        yield Atom.PredCursor(p,largs,cursor,rargs)
     }
   }
 
@@ -163,17 +146,6 @@ abstract sealed class Atom[V,F,P]
     case Eql(l,r) => l == r
     case _        => false
   }
-
-  def lhs: Option[Atom.TermCursor[V,F,P]] =
-    this match {
-      case eq@Eql(x,_) => Some(new Atom.LHSCursor(eq,x.cursor))
-      case _ => None
-    }
-  def rhs: Option[Atom.TermCursor[V,F,P]] =
-    this match {
-      case eq@Eql(_,y) => Some(new Atom.LHSCursor(eq,y.cursor))
-      case _ => None
-    }
 }
 
 /** Predications P(...args...) */

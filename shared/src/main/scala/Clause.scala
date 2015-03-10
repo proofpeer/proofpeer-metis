@@ -11,43 +11,23 @@ import RichCollectionInstances._
 
 object Clause {
   case class TermCursor[V,F,P](
-    top: Clause[V,F,P],
-    pos:    Int,
-    literalCursor: Literal.TermCursor[V,F,P])
+    otherArgs: List[Literal[V,F,P]],
+    cursor: Literal.TermCursor[V,F,P])
       extends GenCursor[V,Term[V,F],Clause[V,F,P],TermCursor[V,F,P]] {
 
-    override def get = literalCursor.get
-
-    override def replaceWith(subterm: Term[V,F]):
-        Clause[V,F,P] = {
-      top.lits.toList.splitAt(pos) match {
-        case (pre,arg::sucs) =>
-          Clause((pre ++ (literalCursor.replaceWith(subterm)::sucs)).toSet)
-        case _ => throw new Error("Bug: No such literal.")
-      }
-    }
-
-    /** The literal containing the subterm. */
-    def literal = top.lits.toList.splitAt(pos) match {
-      case (_,arg::_) => arg
-      case _          => throw new Error("Bug: No such literal.")
-    }
-
-    def substTop(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]) = {
-      val cursor_ = literalCursor.substTop(θ)
-      val lit_    = cursor_.top
-      top.lits.toList.splitAt(pos) match {
-        case (pre,_::sucs) =>
-          val cl = Clause(
-            (pre.map(_.subst(θ)) ++
-              (lit_ :: sucs.map(_.subst(θ)))).toSet)
-          new TermCursor(cl,pos,cursor_)
-        case _ => throw new Error("Bug: No such subterm.")
-      }
-    }
-
-    def children =
-      literalCursor.children.map(new TermCursor(this.top,this.pos,_))
+    def path = cursor.path
+    override def get = cursor.get
+    override def replaceWith(replacement: Term[V,F]) =
+      TermCursor(otherArgs,cursor.replaceWith(replacement))
+    override def subst(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]) =
+      TermCursor(otherArgs.map(_.subst(θ)),cursor.subst(θ))
+    override def down  = cursor.down.map(TermCursor(otherArgs,_))
+    override def up    = cursor.up.map(TermCursor(otherArgs,_))
+    override def left  = cursor.left.map(TermCursor(otherArgs,_))
+    override def right = cursor.right.map(TermCursor(otherArgs,_))
+    override def top   = Clause((cursor.top :: otherArgs).toSet)
+    def literal        = cursor.top
+    def literalCursor  = cursor
   }
 }
 
@@ -59,7 +39,8 @@ object Clause {
   * @tparam P The alphabet from which predicate names are drawn
   */
 case class Clause[V,F,P](lits: Set[Literal[V,F,P]])
-    extends GenTerm[V,Term[V,F],Clause.TermCursor[V,F,P],Clause[V,F,P]] {
+    extends GenTerm[V,Term[V,F],Clause[V,F,P]]
+    with Cursored[V,Term[V,F],Clause[V,F,P],Clause.TermCursor[V,F,P]]{
 
   import LiteralInstances._
   import AtomInstances._
@@ -68,37 +49,13 @@ case class Clause[V,F,P](lits: Set[Literal[V,F,P]])
   override def freeIn(v: V) = lits.exists(_.freeIn(v))
   override def subst(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]) =
     new Clause(lits.map(_.subst(θ)))
-  override def patMatch(θ: Subst[V,Term[V,F]], cl: Clause[V,F,P])(
-    implicit ev: Order[V]) = {
-    def patMatchOrdered(θ: Subst[V,Term[V,F]], ordLits: Seq[Literal[V,F,P]]) = {
-      (lits zip ordLits).foldLeftM(θ) {
-        case (θ, (lit1,lit2)) => lit1.patMatch(θ,lit2)
-      }
-    }
-    (for (
-      perm <- cl.lits.toSeq.permutations;
-      θ    <- patMatchOrdered(θ, Seq() ++ perm))
-    yield θ).toList
-  }
-  override def unify(θ: Subst[V,Term[V,F]], cl: Clause[V,F,P])(
-    implicit ev: Order[V])= {
-    def unifyMatchOrdered(θ: Subst[V,Term[V,F]], ordLits: Seq[Literal[V,F,P]]) = {
-      (lits zip ordLits).foldLeftM(θ) {
-        case (θ, (lit1,lit2)) => lit1.patMatch(θ,lit2)
-      }
-    }
-    (for (
-      perm <- cl.lits.toSeq.permutations;
-      θ    <- unifyMatchOrdered(θ, Seq() ++ perm))
-    yield θ).toList
-  }
   override def heuristicSize = lits.toList.map(_.heuristicSize).sum
 
   override def tops =
     for (
-      (lit,n) <- lits.toList.zipWithIndex;
-      cursor  <- lit.tops)
-    yield new Clause.TermCursor(this,n,cursor)
+      (llits,lit,rlits) <- util.Fun.splits(lits.toList);
+      cursor            <- lit.tops)
+    yield Clause.TermCursor(llits ++ rlits,cursor)
 
   implicit def atomOrder(implicit ordV: Order[V], ordF: Order[F], ordP: Order[P]) =
     Order[Atom[V,F,P]].toScalaOrdering
@@ -126,10 +83,10 @@ case class Clause[V,F,P](lits: Set[Literal[V,F,P]])
 
   def largestSubterms(litOrder: LiteralOrdering[V,F,P]) = {
     for (
-      (lit,n) <- lits.zipWithIndex;
+      (llits,lit,rlits) <- util.Fun.splits(lits.toList);
       if litOrder.isMaximal(this.lits)(lit);
       cursor  <- lit.allSubterms)
-    yield new Clause.TermCursor(this,n,cursor)
+    yield Clause.TermCursor(llits ++ rlits,cursor)
   }
 }
 

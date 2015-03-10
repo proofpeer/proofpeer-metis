@@ -206,8 +206,8 @@ case class IThmFactory[V:Order,F:Order,P:Order,FV,K<:Kernel[V,F,P]](
       case LeftToRight() => (eql.l,eql.r)
       case RightToLeft() => (eql.r,eql.l)
     }
-    def substTop(θ: Subst[V,Term[V,F]]) =
-      new RewriteCursor(top.subst(θ),eql.subst(θ),direction)
+    def subst(θ: Subst[V,Term[V,F]]) =
+      RewriteCursor(top.subst(θ),eql.subst(θ),direction)
     def literal = Literal(true,eql)
     def literalRewrite = {
       val (l,r) = lr
@@ -225,8 +225,7 @@ case class IThmFactory[V:Order,F:Order,P:Order,FV,K<:Kernel[V,F,P]](
           List(LeftToRight()) else List()) ++
         (if (termOrd.tryCompare(y,x) === Some(Ordering.GT))
           List(RightToLeft()) else List()))
-      yield
-        new RewriteCursor(ithm.thm,eql,ort)
+      yield RewriteCursor(ithm.thm,eql,ort)
   }
 
   abstract sealed class Direction
@@ -238,8 +237,8 @@ case class IThmFactory[V:Order,F:Order,P:Order,FV,K<:Kernel[V,F,P]](
     for (
       θ     <- lhs.unify(Subst.empty,subterm.get).headOption;
       lhs_  = lhs.subst(θ);
-      rewr_ = rewrite.substTop(θ);
-      lit_  = subterm.substTop(θ);
+      rewr_ = rewrite.subst(θ);
+      lit_  = subterm.subst(θ);
       if litOrder.isMaximal(rewr_.top.clause.lits)(rewr_.literal);
       if litOrder.isMaximal(subterm.top.clause.lits)(subterm.literal);
       Ordering.GT <- termOrd.tryCompare(rewr_.lhs,rewr_.rhs);

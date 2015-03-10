@@ -7,54 +7,86 @@ import scalaz._
 import Scalaz._
 
 object Term {
-  case class TermCursor[V,F] private[Term] (
-    top: Term[V,F],
-    cursorTerm: Term[V,F],
-    path: Vector[Int]) extends GenCursor[V,Term[V,F],Term[V,F],TermCursor[V,F]] {
-
-    override def get = cursorTerm
-
-    private def replaceAt(
-      term: Term[V,F],
-      replacement: Term[V,F],
-      path: Vector[Int]): Term[V,F] = {
-      (term,path) match {
-        case (_,Vector())           => replacement
-        case (Fun(f,args), n +: ns) =>
-          args.splitAt(n) match {
-            case (pre,arg::sucs) =>
-              Fun(f,pre ++ (replaceAt(arg,replacement,ns)::sucs))
-            case _               =>
-              throw new Error("Bug: No such subterm.")
-          }
-        case _ => throw new Error("Bug: No such subterm.")
-      }
+  sealed abstract class TermCursor[V,F]
+      extends GenCursor[V,Term[V,F],Term[V,F],TermCursor[V,F]]
+  {
+    override def get = this match {
+      case Top(tm)    => tm
+      case Arg(lvl,_) => lvl.get
     }
 
-    override def replaceWith(replacement: Term[V,F]): Term[V,F] =
-      replaceAt(this.top,replacement,this.path)
-
-    override def substTop(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]) =
-      new TermCursor(top.subst(θ),cursorTerm.subst(θ),path)
-
-    override def children =
-      cursorTerm match {
-        case Fun(_,args) =>
-          for ((arg,i) <- args.zipWithIndex)
-          yield new Term.TermCursor(top,arg,this.path :+ i)
-        case _           => List()
+    override def down = get match {
+      case Fun(f,arg::args) =>
+        Some(Arg(FunCursor(f,arg,List(),args),this match {
+          case Top(_)                    => List()
+          case Arg(FunCursor(g,_,ls,rs),ctx) => FunCursor(g,(),ls,rs) :: ctx
+        }))
+      case _ => None
+    }
+    override def left = this match {
+      case Arg(FunCursor(f,arg,larg :: largs, rargs),ctx) =>
+        Some(Arg(FunCursor(f,larg,largs,arg::rargs),ctx))
+      case _ => None
+    }
+    override def right = this match {
+      case Arg(FunCursor(f,arg,largs,rarg::rargs),ctx) =>
+        Some(Arg(FunCursor(f,rarg,arg::largs,rargs),ctx))
+      case _ => None
+    }
+    override def up = this match {
+      case Arg(FunCursor(f,arg,largs,rargs),List()) =>
+        Some(Top(Fun(f,largs ++ List(arg) ++ rargs)))
+      case Arg(FunCursor(f,arg,largs,rargs),FunCursor(g,u,uls,urs) :: ctx) =>
+        Some(Arg(FunCursor(g,Fun(f,largs ++ List(arg) ++ rargs),uls,urs),ctx))
+      case Top(_) => None
+    }
+    override def replaceWith(tm: Term[V,F]) = this match {
+      case Top(_) => Top(tm)
+      case Arg(FunCursor(f,_,largs,rargs),ctx) =>
+        Arg(FunCursor(f,tm,largs,rargs),ctx)
+    }
+    override def subst(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]) = {
+      def substLevel(lvl: FunCursor[V,F,Unit]) = {
+        val FunCursor(f,(),largs,rargs) = lvl
+        FunCursor(f,(),largs.map(_.subst(θ)),rargs.map(_.subst(θ)))
       }
+      this match {
+        case Top(tm)                               => Top(tm.subst(θ))
+        case Arg(FunCursor(f,arg,largs,rargs),ctx) =>
+          Arg(
+            FunCursor(f,arg.subst(θ),largs.map(_.subst(θ)),rargs.map(_.subst(θ))),
+            ctx.map(substLevel(_)))
+      }
+    }
+    override def path = {
+      val hpos = util.Fun.unfoldW(this)(_.left.map(x => (x,1)))
+      up.map(_.path).getOrElse(Vector()) :+ hpos
+    }
+    override def top = util.Fun.loop(this)(u => u.up).get
+  }
+  case class Top[V,F] private[Term](tm: Term[V,F]) extends TermCursor[V,F]
+  case class Arg[V,F](
+    lvl:FunCursor[V,F,Term[V,F]],
+    context:List[FunCursor[V,F,Unit]]) extends TermCursor[V,F]
+
+  sealed case class FunCursor[V,F,A](
+    f:F,
+    x:A,
+    largs:List[Term[V,F]],
+    rargs:List[Term[V,F]]) {
+    def get = x
   }
 }
 
-/** Terms as in first-order logic; i.e. the structured elements that are arguments to
-  * predicates and that appear on the left- and right-hand sides of equations.
-  * @tparam V The alphabet from which variable names are drawn
-  * @tparam F The alphabet from which functor names are drawn
-  */
+ /** Terms as in first-order logic; i.e. the structured elements that are arguments
+   * to predicates and that appear on the left- and right-hand sides of equations.
+   * @tparam V The alphabet from which variable names are drawn
+   * @tparam F The alphabet from which functor names are drawn
+   */
 abstract sealed class Term[V,F]
-    extends GenTerm[V,Term[V,F],Term.TermCursor[V,F],Term[V,F]] {
-
+    extends GenTerm[V,Term[V,F],Term[V,F]]
+    with MatchableTerm[V,Term[V,F],Term[V,F]]
+    with Cursored[V,Term[V,F],Term[V,F],Term.TermCursor[V,F]] {
   override def freeIn(v: V): Boolean = {
     this match {
       case Var(v_) => v == v_
@@ -145,7 +177,7 @@ abstract sealed class Term[V,F]
     }
   }
 
-  def cursor: Term.TermCursor[V,F] = new Term.TermCursor(this,this,Vector())
+  def cursor: Term.TermCursor[V,F] = Term.Top(this)
 
   override def tops: List[Term.TermCursor[V,F]] = List(cursor)
 }
