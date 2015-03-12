@@ -189,19 +189,11 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
     */
   def repeatTopDownConvRule(
     lit:  Literal[V,F,P],
-    conv: Term[V,F] => Option[(Term[V,F], Thm)]): Option[(Thm,Literal[V,F,P])] = {
-
-    null
-    // val isPositive = lit.isPositive
-    // val atom       = lit.atom
-    // val ((deps,lits),newAtom) = repeatTopDownConvAtom(atom,convRule(conv)).run
-
-    // lits.map { lits =>
-    //   (Thm(
-    //     Clause(lits + Literal(!isPositive,atom) + Literal(isPositive,newAtom)),
-    //     Conv(lit, deps.toList)),
-    //     Literal(lit.isPositive,newAtom))
-    // }
+    conv: Term[V,F] => Option[(Term[V,F], Thm)]) = {
+    lit.top.map { tmC =>
+      val (thm,newTmC) =  repeatTermConv(conv)(tmC).run(assume(lit))
+      (thm,newTmC.top)
+    }
   }
 
   /** Wrap a clause cursor to a subterm. */
