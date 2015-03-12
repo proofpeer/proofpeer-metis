@@ -145,24 +145,24 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
   type TC = Literal.TermCursor[V,F,P]
   def convRule(conv: Term[V,F] => Option[(Term[V,F],Thm)]):
       TC => State[Thm,Option[TC]] =
-  tmC => {
-    get[Thm] >>= { oldThm =>
-      val conved =
-        for (
-          conved                 <- conv(tmC.get);
-          (newTm,eql)            = conved;
-          eqLit                  = Literal(true,Eql[V,F,P](tmC.get,newTm));
-          (oldLit,newTmC,eqlThm) = equality(tmC,newTm);
-          thm                    = resolve(eqLit,eql,eqlThm)
-                                       .getOrBug("Invalid conversion");
-          thm2                   = resolve(oldLit,oldThm,thm).getOrBug(
-                                     "Should be able to resolve on new literal")
-          )
-        yield newTmC
-      conved.point[ST]
-    }
-  }
+    tmC =>
+      get[Thm] >>= { oldThm =>
+        val conved =
+          for (
+            conved                 <- conv(tmC.get);
+            (newTm,eql)            = conved;
+            eqLit                  = Literal(true,Eql[V,F,P](tmC.get,newTm));
+            (oldLit,newTmC,eqlThm) = equality(tmC,newTm);
+            thm                    = resolve(eqLit,eql,eqlThm)
+                                         .getOrBug("Invalid conversion");
+            thm2                   = resolve(oldLit,oldThm,thm).getOrBug(
+                                       "Should be able to resolve on new literal")
+            )
+          yield newTmC
+        conved.point[ST]
+      }
 
+  // Spin on this term, and then descend.
   def downConv(conv: Term[V,F] => Option[(Term[V,F],Thm)]):
       Literal.TermCursor[V,F,P] => State[Thm,Option[TC]] = tmC => {
     for (
@@ -176,6 +176,7 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
       yield downTmC
   }
 
+  // Spin on this term and its descendents, and do the same to the right.
   def rightConv(conv: Term[V,F] => Option[(Term[V,F],Thm)]):
       Literal.TermCursor[V,F,P] => State[Thm,Option[TC]] = tmC => {
     for (
