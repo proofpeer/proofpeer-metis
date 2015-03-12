@@ -11,21 +11,42 @@ import RichCollectionInstances._
 
 object Clause {
   case class TermCursor[V,F,P](
-    otherArgs: List[Literal[V,F,P]],
-    cursor: Literal.TermCursor[V,F,P])
+    largs:  List[Literal[V,F,P]],
+    cursor: Literal.TermCursor[V,F,P],
+    rargs:  List[Literal[V,F,P]])
       extends GenCursor[V,Term[V,F],Clause[V,F,P],TermCursor[V,F,P]] {
 
     def path = cursor.path
     override def get = cursor.get
     override def replaceWith(replacement: Term[V,F]) =
-      TermCursor(otherArgs,cursor.replaceWith(replacement))
+      TermCursor(largs,cursor.replaceWith(replacement),rargs)
     override def subst(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]) =
-      TermCursor(otherArgs.map(_.subst(θ)),cursor.subst(θ))
-    override def down  = cursor.down.map(TermCursor(otherArgs,_))
-    override def up    = cursor.up.map(TermCursor(otherArgs,_))
-    override def left  = cursor.left.map(TermCursor(otherArgs,_))
-    override def right = cursor.right.map(TermCursor(otherArgs,_))
-    override def top   = Clause((cursor.top :: otherArgs).toSet)
+      TermCursor(largs.map(_.subst(θ)),cursor.subst(θ),rargs.map(_.subst(θ)))
+    override def down  = cursor.down.map(TermCursor(largs,_,rargs))
+    override def up    = cursor.up.map(TermCursor(largs,_,rargs))
+    override def left  = {
+      if (cursor.up.isDefined)
+        cursor.left.map(TermCursor(largs,_,rargs))
+      else
+        largs match {
+          case List()      => None
+          case larg::largs => larg.top.map {
+            top => TermCursor(largs,top,cursor.top::rargs)
+          }
+        }
+    }
+    override def right = {
+      if (cursor.up.isDefined)
+        cursor.right.map(TermCursor(largs,_,rargs))
+      else
+        rargs match {
+          case List()      => None
+          case rarg::rargs => rarg.top.map {
+            top => TermCursor(cursor.top::largs,top,rargs)
+          }
+        }
+    }
+    override def top   = Clause((cursor.top :: largs ++ rargs).toSet)
     def literal        = cursor.top
     def literalCursor  = cursor
   }
@@ -51,11 +72,14 @@ case class Clause[V,F,P](lits: Set[Literal[V,F,P]])
     new Clause(lits.map(_.subst(θ)))
   override def heuristicSize = lits.toList.map(_.heuristicSize).sum
 
-  override def tops =
-    for (
-      (llits,lit,rlits) <- util.Fun.splits(lits.toList);
-      cursor            <- lit.tops)
-    yield Clause.TermCursor(llits ++ rlits,cursor)
+  override def top =
+    lits.toList match {
+      case List()    => None
+      case lit::lits =>
+        lit.top.map {
+          top => Clause.TermCursor(List(),top,lits)
+        }
+    }
 
   implicit def atomOrder(implicit ordV: Order[V], ordF: Order[F], ordP: Order[P]) =
     Order[Atom[V,F,P]].toScalaOrdering
@@ -86,7 +110,7 @@ case class Clause[V,F,P](lits: Set[Literal[V,F,P]])
       (llits,lit,rlits) <- util.Fun.splits(lits.toList);
       if litOrder.isMaximal(this.lits)(lit);
       cursor  <- lit.allSubterms)
-    yield Clause.TermCursor(llits ++ rlits,cursor)
+    yield Clause.TermCursor(llits,cursor,rlits)
   }
 }
 

@@ -242,7 +242,7 @@ case class IThmFactory[V:Order,F:Order,P:Order,FV,K<:Kernel[V,F,P]](
       if litOrder.isMaximal(rewr_.top.clause.lits)(rewr_.literal);
       if litOrder.isMaximal(subterm.top.clause.lits)(subterm.literal);
       Ordering.GT <- termOrd.tryCompare(rewr_.lhs,rewr_.rhs);
-      equal = kernel.equality(lit_.clauseCursor.literalCursor, rewr_.rhs);
+      (_,_,equal) = kernel.equality(lit_.clauseCursor.literalCursor, rewr_.rhs);
       val resolvent = (for (
         resolvent1 <- kernel.resolve(rewr_.literalRewrite,rewr_.topRewrite,equal);
         resolvent2 <- if (resolvent1.clause(lit_.literal.negate))

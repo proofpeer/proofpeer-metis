@@ -54,9 +54,14 @@ object Fun {
   def loopCollect[A](x: A)(f: A => Option[A]): List[A] =
     (unfoldM[Id,DList[A],A](x) { x => f(x).map(x => (x,x +: ∅[DList[A]])) }).toList
 
-  /** Loop, returning the last defined element. */
-  def loop[A](x: A)(f : A => Option[A]): A = {
-    f(x).map(loop(_)(f)).getOrElse(x)
+  /** Loop at least once, returning the last defined element. */
+  def loopM[M[_]:Monad, A](x: A)(f : A => M[Option[A]]): M[Option[A]] =
+    unfoldM(x) { f(_).map (_.map { x => (x,Tags.Last(x.some)) }) }
+      .map(Tags.Last.unwrap(_))
+
+  /** Loop at least once, returning the last defined element. */
+  def loop1[A](x: A)(f : A => Option[A]): Option[A] = {
+    loopM[Id,A](x)(f)
   }
 
   def existsM[X,M[_]:Monad](xs: Iterator[X])(p: X => M[Boolean]): M[Boolean] = {

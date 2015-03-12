@@ -62,7 +62,8 @@ object Term {
       val hpos = util.Fun.unfoldW(this)(_.left.map(x => (x,1)))
       up.map(_.path).getOrElse(Vector()) :+ hpos
     }
-    override def top = util.Fun.loop(this)(u => u.up).get
+    override def top =
+      util.Fun.loop1(this)(u => u.up).map(_.get).getOrElse(this.get)
   }
   case class Top[V,F] private[Term](tm: Term[V,F]) extends TermCursor[V,F]
   case class Arg[V,F](
@@ -179,7 +180,7 @@ abstract sealed class Term[V,F]
 
   def cursor: Term.TermCursor[V,F] = Term.Top(this)
 
-  override def tops: List[Term.TermCursor[V,F]] = List(cursor)
+  override def top: Option[Term.TermCursor[V,F]] = Some(cursor)
 }
 
 case class Var[V,F](v: V) extends Term[V,F]
