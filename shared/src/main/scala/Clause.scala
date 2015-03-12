@@ -128,9 +128,9 @@ object ClauseInstances {
 
 /** Destruct a clause of the form ¬(x=x) */
 object IrreflLit {
-  def unapply[V,F,P](lit: Literal[V,F,P]): Option[Term[V,F]] =
+  def unapply[V,F,P](lit: Literal[V,F,P]): Option[Eql[V,F,P]] =
     (lit.isPositive,lit.atom) match {
-      case (false,Eql(l,r)) if l == r => Some(l)
+      case (false,Eql(l,r)) if l == r => Some(Eql(l,r))
       case _                          => None
     }
 }

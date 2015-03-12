@@ -20,16 +20,13 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
   case class Axiom() extends Inference
   case class Assume() extends Inference
   case class Refl() extends Inference
-  case class Sym() extends Inference
-  case class Trans[V,F,P](xy: Thm, yz: Thm) extends Inference
   case class Equality[V,F,P](
     p: Literal.TermCursor[V,F,P],
     tm: Term[V,F]) extends Inference
   case class RemoveSym[V,F,P](thm: Thm) extends Inference
-  case class Conv[V,F,P](literal: Literal[V,F,P], thm: List[Thm]) extends Inference
+  case class Irreflexive[V,F,P](thm: Thm) extends Inference
   case class InfSubst(θ: Subst[V,Term[V,F]], thm: Thm) extends Inference
   case class Resolve[V,F,P](pos: Thm, neg: Thm) extends Inference
-  case class Irreflexive[V,F,P](thm: Thm) extends Inference
 
   case class Thm private[Kernel](clause: Clause[V,F,P], rule: Inference) {
     def isTautology     = clause.isTautology
@@ -44,7 +41,6 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
       // do not return a newly constructed clause.
       Thm(Clause(clause.subst(θ)),InfSubst(θ,this))
 
-    // Derived in Hurd. Primitive here
     /**      C ∨ ~(x = x)
       *  ------------------- removeIrrefl
       *           C
@@ -167,16 +163,29 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
     }
   }
 
-  def repeatTermConv(conv: Term[V,F] => Option[(Term[V,F],Thm)]):
-      Literal.TermCursor[V,F,P] => State[Thm,TC] = tmC => {
+  def downConv(conv: Term[V,F] => Option[(Term[V,F],Thm)]):
+      Literal.TermCursor[V,F,P] => State[Thm,Option[TC]] = tmC => {
     for (
       newTmC  <- util.Fun.loopM[ST,TC](tmC)(convRule(conv));
-      newTmC2 <-
-        newTmC.orElse(tmC.down).orElse(tmC.right).orElse(tmC.up) match {
-          case None          => tmC.point[ST]
-          case Some(newTmC2) => repeatTermConv(conv)(newTmC2)
-        })
-      yield newTmC2
+      downTmC <- newTmC.orElse(tmC.down) match {
+        case None      => None.point[ST]
+        case Some(tmC) =>
+          rightConv(conv)(tmC).map(_.map(_.up.getOrBug(
+            "Moved down. Must be able to move back up.")))
+      })
+      yield downTmC
+  }
+
+  def rightConv(conv: Term[V,F] => Option[(Term[V,F],Thm)]):
+      Literal.TermCursor[V,F,P] => State[Thm,Option[TC]] = tmC => {
+    for (
+      newTmC  <- util.Fun.loopM[ST,TC](tmC)(downConv(conv));
+      newTmC2 <- newTmC.orElse(tmC.right) match {
+        case None      => None.point[ST]
+        case Some(tmC) => rightConv(conv)(tmC)
+      }
+    )
+    yield newTmC2
   }
 
   /**
@@ -190,10 +199,11 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
   def repeatTopDownConvRule(
     lit:  Literal[V,F,P],
     conv: Term[V,F] => Option[(Term[V,F], Thm)]) = {
-    lit.top.map { tmC =>
-      val (thm,newTmC) =  repeatTermConv(conv)(tmC).run(assume(lit))
-      (thm,newTmC.top)
-    }
+    for (
+      tmC          <- lit.top;
+      (thm,newTmC)  = downConv(conv)(tmC).run(assume(lit));
+      newLit       <- newTmC.map(_.top))
+    yield (thm,newLit)
   }
 
   /** Wrap a clause cursor to a subterm. */

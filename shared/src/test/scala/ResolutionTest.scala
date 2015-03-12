@@ -120,59 +120,59 @@ class ResolutionSpec extends FlatSpec {
     "Set Theory Problem 1",
     tptp.Problems.SET.SET001_MINUS1.clauses,
     16,
-    5)
+    2)
 
   tryProblem(
     "Set Theory Problem 2",
     tptp.Problems.SET.SET002_MINUS1.clauses,
     51,
-    5)
+    2)
 
   tryProblem(
     "Set Theory Problem 3",
     tptp.Problems.SET.SET003_MINUS1.clauses,
     25,
-    5)
+    2)
 
   tryProblem(
     "Set Theory Problem 4",
     tptp.Problems.SET.SET004_MINUS1.clauses,
     26,
-    5)
+    2)
 
   tryProblem(
     "Set Theory Problem 5",
     tptp.Problems.SET.SET005_MINUS1.clauses,
     522,
-    5)
+    2)
 
   tryProblem(
     "Set Theory Problem 6",
     tptp.Problems.SET.SET006_MINUS1.clauses,
     25,
-    5)
+    2)
 
   tryProblem(
     "Set Theory Problem 7",
     tptp.Problems.SET.SET007_MINUS1.clauses,
     1649,
-    5)
+    2)
 
   tryProblem(
     "Set Theory Problem 8",
     tptp.Problems.SET.SET008_MINUS1.clauses,
     94,
-    5)
+    2)
 
   tryProblem(
     "Set Theory Problem 9",
     tptp.Problems.SET.SET009_MINUS1.clauses,
     134,
-    5)
+    2)
 
   tryProblem(
     "Set Theory Problem 10",
     tptp.Problems.SET.SET010_MINUS1.clauses,
     2242,
-    5)
+    2)
 }

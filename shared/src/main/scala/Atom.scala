@@ -40,9 +40,9 @@ object Atom {
     }
     override def right = {
       if (cursor.up.isDefined)
-        cursor.left.map(PredCursor(p,largs,_,rargs))
+        cursor.right.map(PredCursor(p,largs,_,rargs))
       else
-        largs match {
+        rargs match {
           case List()      => None
           case rarg::rargs =>
             rarg.top.map { top => PredCursor(p,cursor.top::largs,top,rargs) }
