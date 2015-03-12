@@ -49,7 +49,7 @@ object Atom {
         }
     }
     override def up    = cursor.up.map(PredCursor(p,largs,_,rargs))
-    override def top   = Pred(p,largs ++ List(cursor.top) ++ rargs)
+    override def top   = Pred(p,largs.reverse ++ List(cursor.top) ++ rargs)
   }
 
   case class LHSCursor[V,F,P] private[Atom](

@@ -15,46 +15,52 @@ object Term {
       case Arg(lvl,_) => lvl.get
     }
 
-    override def down = get match {
+    override def down = {
+      get match {
       case Fun(f,arg::args) =>
-        Some(Arg(FunCursor(f,arg,List(),args),this match {
-          case Top(_)                    => List()
-          case Arg(FunCursor(g,_,ls,rs),ctx) => FunCursor(g,(),ls,rs) :: ctx
+        Some(Arg(FunCursor(f,List(),arg,args),this match {
+          case Top(_)                        => List()
+          case Arg(FunCursor(g,ls,_,rs),ctx) => FunCursor(g,ls,(),rs) :: ctx
         }))
-      case _ => None
+        case _ => None
+      }
     }
     override def left = this match {
-      case Arg(FunCursor(f,arg,larg :: largs, rargs),ctx) =>
-        Some(Arg(FunCursor(f,larg,largs,arg::rargs),ctx))
+      case Arg(FunCursor(f,larg::largs, arg, rargs),ctx) =>
+        Some(Arg(FunCursor(f,largs,larg,arg::rargs),ctx))
       case _ => None
     }
-    override def right = this match {
-      case Arg(FunCursor(f,arg,largs,rarg::rargs),ctx) =>
-        Some(Arg(FunCursor(f,rarg,arg::largs,rargs),ctx))
-      case _ => None
+    override def right = {
+      this match {
+      case Arg(FunCursor(f,largs,arg,rarg::rargs),ctx) =>
+        Some(Arg(FunCursor(f,arg::largs,rarg,rargs),ctx))
+        case _ => None
+      }
     }
-    override def up = this match {
-      case Arg(FunCursor(f,arg,largs,rargs),List()) =>
-        Some(Top(Fun(f,largs ++ List(arg) ++ rargs)))
-      case Arg(FunCursor(f,arg,largs,rargs),FunCursor(g,u,uls,urs) :: ctx) =>
-        Some(Arg(FunCursor(g,Fun(f,largs ++ List(arg) ++ rargs),uls,urs),ctx))
+    override def up:scala.Option[TermCursor[V, F]] = this match {
+      case Arg(FunCursor(f,largs,arg,rargs),List()) =>
+        Some(Top(Fun(f,largs.reverse ++ List(arg) ++ rargs)))
+      case Arg(FunCursor(f,largs,arg,rargs),FunCursor(g,uls,(),urs) :: ctx) =>
+        Some(Arg(FunCursor(g,uls,
+          Fun(f,largs.reverse ++ List(arg) ++ rargs),urs),ctx))
       case Top(_) => None
     }
+
     override def replaceWith(tm: Term[V,F]) = this match {
       case Top(_) => Top(tm)
-      case Arg(FunCursor(f,_,largs,rargs),ctx) =>
-        Arg(FunCursor(f,tm,largs,rargs),ctx)
+      case Arg(FunCursor(f,largs,_,rargs),ctx) =>
+        Arg(FunCursor(f,largs,tm,rargs),ctx)
     }
     override def subst(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]) = {
       def substLevel(lvl: FunCursor[V,F,Unit]) = {
-        val FunCursor(f,(),largs,rargs) = lvl
-        FunCursor(f,(),largs.map(_.subst(θ)),rargs.map(_.subst(θ)))
+        val FunCursor(f,largs,(),rargs) = lvl
+        FunCursor(f,largs.map(_.subst(θ)),(),rargs.map(_.subst(θ)))
       }
       this match {
         case Top(tm)                               => Top(tm.subst(θ))
-        case Arg(FunCursor(f,arg,largs,rargs),ctx) =>
+        case Arg(FunCursor(f,largs,arg,rargs),ctx) =>
           Arg(
-            FunCursor(f,arg.subst(θ),largs.map(_.subst(θ)),rargs.map(_.subst(θ))),
+            FunCursor(f,largs.map(_.subst(θ)),arg.subst(θ),rargs.map(_.subst(θ))),
             ctx.map(substLevel(_)))
       }
     }
@@ -72,8 +78,8 @@ object Term {
 
   sealed case class FunCursor[V,F,A](
     f:F,
-    x:A,
     largs:List[Term[V,F]],
+    x:A,
     rargs:List[Term[V,F]]) {
     def get = x
   }
@@ -178,9 +184,7 @@ abstract sealed class Term[V,F]
     }
   }
 
-  def cursor: Term.TermCursor[V,F] = Term.Top(this)
-
-  override def top: Option[Term.TermCursor[V,F]] = Some(cursor)
+  override def top: Option[Term.TermCursor[V,F]] = Some(Term.Top(this))
 }
 
 case class Var[V,F](v: V) extends Term[V,F]

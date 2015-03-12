@@ -46,7 +46,7 @@ object Clause {
           }
         }
     }
-    override def top   = Clause((cursor.top :: largs ++ rargs).toSet)
+    override def top   = Clause((cursor.top :: largs.reverse ++ rargs).toSet)
     def literal        = cursor.top
     def literalCursor  = cursor
   }

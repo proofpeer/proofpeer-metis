@@ -118,9 +118,9 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
     val s      = tmC.get
     val oldLit = tmC.top
     val tmC_   = tmC.replaceWith(t)
-    val eq     = Literal(false,Eql[V,F,P](s,t))
+    val neq    = Literal(false,Eql[V,F,P](s,t))
     val newLit = tmC_.top
-    (oldLit,tmC_,Thm(Clause(Set(eq, oldLit.negate, newLit)),Equality(tmC,t)))
+    (oldLit,tmC_,Thm(Clause(Set(neq, oldLit.negate, newLit)),Equality(tmC,t)))
   }
 
   // Derived rules
@@ -145,48 +145,39 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
   type TC = Literal.TermCursor[V,F,P]
   def convRule(conv: Term[V,F] => Option[(Term[V,F],Thm)]):
       TC => State[Thm,Option[TC]] =
-    tmC =>
+    tmC => {
       get[Thm] >>= { oldThm =>
-        val conved =
-          for (
-            conved                 <- conv(tmC.get);
-            (newTm,eql)            = conved;
-            eqLit                  = Literal(true,Eql[V,F,P](tmC.get,newTm));
-            (oldLit,newTmC,eqlThm) = equality(tmC,newTm);
-            thm                    = resolve(eqLit,eql,eqlThm)
-                                         .getOrBug("Invalid conversion");
-            thm2                   = resolve(oldLit,oldThm,thm).getOrBug(
-                                       "Should be able to resolve on new literal")
-            )
-          yield newTmC
-        conved.point[ST]
+        conv(tmC.get).traverseS {
+          case (newTm,eql) =>
+            val eqLit                  = Literal(true,Eql[V,F,P](tmC.get,newTm));
+            val (oldLit,newTmC,eqlThm) = equality(tmC,newTm);
+            val thm                    =
+              resolve(eqLit,eql,eqlThm).getOrBug("Invalid conversion");
+            val newThm                 =
+              resolve(oldLit,oldThm,thm).getOrBug(
+                "Should be able to resolve on new literal")
+            put[Thm](newThm) >> newTmC.point[ST]
+        }
       }
+    }
 
-  // Spin on this term, and then descend.
-  def downConv(conv: Term[V,F] => Option[(Term[V,F],Thm)]):
+  // Exhaustively convert this term and all its descendents.
+  def termConv(conv: Term[V,F] => Option[(Term[V,F],Thm)]):
       Literal.TermCursor[V,F,P] => State[Thm,Option[TC]] = tmC => {
     for (
-      newTmC  <- util.Fun.loopM[ST,TC](tmC)(convRule(conv));
-      downTmC <- newTmC.orElse(tmC.down) match {
-        case None      => None.point[ST]
-        case Some(tmC) =>
-          rightConv(conv)(tmC).map(_.map(_.up.getOrBug(
-            "Moved down. Must be able to move back up.")))
-      })
-      yield downTmC
-  }
-
-  // Spin on this term and its descendents, and do the same to the right.
-  def rightConv(conv: Term[V,F] => Option[(Term[V,F],Thm)]):
-      Literal.TermCursor[V,F,P] => State[Thm,Option[TC]] = tmC => {
-    for (
-      newTmC  <- util.Fun.loopM[ST,TC](tmC)(downConv(conv));
-      newTmC2 <- newTmC.orElse(tmC.right) match {
-        case None      => None.point[ST]
-        case Some(tmC) => rightConv(conv)(tmC)
-      }
+      // Go down into the term and convert
+      downTmC <- tmC.down.traverseS { tmC =>
+        termConv(conv)(tmC).map(_.map { _.up.getOrBug(
+            "Moved down. Must be able to move back up.")})
+      }.map(_.join);
+      // Convert this term
+      downTmC2 <- convRule(conv)(downTmC.getOrElse(tmC));
+      // Go back down if this term has changed, otherwise go right.
+      nextTmC   <- downTmC2.orElse(tmC.right).traverseS { tmC =>
+        termConv(conv)(tmC)
+      }.map(_.join)
     )
-    yield newTmC2
+    yield nextTmC.orElse(downTmC2).orElse(downTmC)
   }
 
   /**
@@ -202,7 +193,7 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
     conv: Term[V,F] => Option[(Term[V,F], Thm)]) = {
     for (
       tmC          <- lit.top;
-      (thm,newTmC)  = downConv(conv)(tmC).run(assume(lit));
+      (thm,newTmC)  = termConv(conv)(tmC).run(assume(lit));
       newLit       <- newTmC.map(_.top))
     yield (thm,newLit)
   }
