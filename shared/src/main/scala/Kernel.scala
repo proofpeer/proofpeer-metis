@@ -146,10 +146,13 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
   import OptionT._
   import syntax._
   implicit class toTryM[A](x: M[A]) {
+    // Try to perform a computation, keeping the original value on failure.
     def andTry(f: A => M[A]): M[A] =
       x >>= (y => f(y).orElse(y.point[M]))
-    def getSuccess =
+
+    def getSuccess: M[Option[A]] =
       State[Thm,Option[A]](s => x.run(s)).liftM
+
     def orElse(y: M[A]) =
       State[Thm,Option[A]](s => {
         val (sx,x2) = x.run(s)
@@ -159,6 +162,7 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
         }
       })
   }
+
   implicit class toOptM[A](x: Option[A]) {
     def liftOpt: M[A] = {
       x.map(_.point[M]).getOrElse(none)
