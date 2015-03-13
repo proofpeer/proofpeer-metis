@@ -142,42 +142,63 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
   }
 
   type ST[A] = State[Thm,A]
-  type TC = Literal.TermCursor[V,F,P]
-  def convRule(conv: Term[V,F] => Option[(Term[V,F],Thm)]):
-      TC => State[Thm,Option[TC]] =
-    tmC => {
-      get[Thm] >>= { oldThm =>
-        conv(tmC.get).traverseS {
-          case (newTm,eql) =>
-            val eqLit                  = Literal(true,Eql[V,F,P](tmC.get,newTm));
-            val (oldLit,newTmC,eqlThm) = equality(tmC,newTm);
-            val thm                    =
-              resolve(eqLit,eql,eqlThm).getOrBug("Invalid conversion");
-            val newThm                 =
-              resolve(oldLit,oldThm,thm).getOrBug(
-                "Should be able to resolve on new literal")
-            put[Thm](newThm) >> newTmC.point[ST]
+  type M[A]  = OptionT[ST,A]
+  import OptionT._
+  import syntax._
+  implicit class toTryM[A](x: M[A]) {
+    def andTry(f: A => M[A]): M[A] =
+      x >>= (y => f(y).orElse(y.point[M]))
+    def getSuccess =
+      State[Thm,Option[A]](s => x.run(s)).liftM
+    def orElse(y: M[A]) =
+      State[Thm,Option[A]](s => {
+        val (sx,x2) = x.run(s)
+        x2 match {
+          case None => y.run(sx)
+          case _    => (sx,x2)
         }
-      }
+      })
+  }
+  implicit class toOptM[A](x: Option[A]) {
+    def liftOpt: M[A] = {
+      x.map(_.point[M]).getOrElse(none)
+    }
+  }
+
+  type TC = Literal.TermCursor[V,F,P]
+  def convRule(conv: Term[V,F] => Option[(Term[V,F],Thm)]): TC => M[TC] =
+    tmC => {
+      for (
+        oldThm <- get[Thm].liftM;
+        conved <- conv(tmC.get).liftOpt;
+        (newTm,eql) = conved;
+        eqLit                  = Literal(true,Eql[V,F,P](tmC.get,newTm));
+        (oldLit,newTmC,eqlThm) = equality(tmC,newTm);
+        thm                    = resolve(eqLit,eql,eqlThm).getOrBug(
+          "Invalid conversion");
+        newThm                 = resolve(oldLit,oldThm,thm).getOrBug(
+          "Should be able to resolve on new literal");
+        ()   <- put[Thm](newThm).liftM)
+      yield newTmC
     }
 
   // Exhaustively convert this term and all its descendents.
   def termConv(conv: Term[V,F] => Option[(Term[V,F],Thm)]):
-      Literal.TermCursor[V,F,P] => State[Thm,Option[TC]] = tmC => {
+      Literal.TermCursor[V,F,P] => M[TC] = tmC => {
     for (
-      // Go down into the term and convert
-      downTmC <- tmC.down.traverseS { tmC =>
-        termConv(conv)(tmC).map(_.map { _.up.getOrBug(
-            "Moved down. Must be able to move back up.")})
-      }.map(_.join);
-      // Convert this term
-      downTmC2 <- convRule(conv)(downTmC.getOrElse(tmC));
-      // Go back down if this term has changed, otherwise go right.
-      nextTmC   <- downTmC2.orElse(tmC.right).traverseS { tmC =>
-        termConv(conv)(tmC)
-      }.map(_.join)
+      // Go down and try to convert
+      downTmC <- (tmC.down.liftOpt >>= (termConv(conv)(_))).getSuccess;
+      // Go back up
+      nextTry = downTmC.map(_.up.getOrBug(
+        "Moved down. Must be able to move back up.")) getOrElse tmC;
+      // Convert this term, loop, and then convert right.
+      nextTmC <- ((convRule(conv)(nextTry) andTry (termConv(conv(_))))
+        orElse (nextTry.right.liftOpt >>= (termConv(conv)(_))))
+           .getSuccess;
+      // Conversion is successful if either of the previous steps were.
+      nextTmC2 <- (nextTmC orElse downTmC).liftOpt
     )
-    yield nextTmC.orElse(downTmC2).orElse(downTmC)
+    yield nextTmC2
   }
 
   /**
