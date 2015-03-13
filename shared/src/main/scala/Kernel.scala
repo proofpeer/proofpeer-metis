@@ -147,7 +147,7 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
   import syntax._
   implicit class toTryM[A](x: M[A]) {
     // Try to perform a computation, keeping the original value on failure.
-    def andTry(f: A => M[A]): M[A] =
+    def andMaybe(f: A => M[A]): M[A] =
       x >>= (y => f(y).orElse(y.point[M]))
 
     def getSuccess: M[Option[A]] =
@@ -195,8 +195,8 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
       // Go back up
       nextTry = downTmC.map(_.up.getOrBug(
         "Moved down. Must be able to move back up.")) getOrElse tmC;
-      // Convert this term, loop, and then convert right.
-      nextTmC <- ((convRule(conv)(nextTry) andTry (termConv(conv(_))))
+      // Convert this term and maybe loop. If that fails, convert right.
+      nextTmC <- ((convRule(conv)(nextTry) andMaybe (termConv(conv(_))))
         orElse (nextTry.right.liftOpt >>= (termConv(conv)(_))))
            .getSuccess;
       // Conversion is successful if either of the previous steps were.
