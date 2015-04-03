@@ -20,7 +20,7 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
   case class Axiom() extends Inference
   case class Assume() extends Inference
   case class Refl() extends Inference
-  case class Equality[V,F,P](
+  case class Equality(
     p: Literal.TermCursor[V,F,P],
     tm: Term[V,F]) extends Inference
   case class RemoveSym[V,F,P](thm: Thm) extends Inference
