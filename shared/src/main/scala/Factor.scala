@@ -47,8 +47,8 @@ class Factor[V:Order,F,P]
       yield edge).some
   }
 
-  private def initEdges(subEdges: List[SubEdge]) = {
-    var apart = List[Edge]()
+  private def initEdges(initApart:List[Edge],subEdges: List[SubEdge]) = {
+    var apart = initApart
     val allEdges = (subEdges.map { case SubEdge(_,edge) => edge }).tails.drop(1)
     for (
       (SubEdge(θ, edge),agenda) <- subEdges.iterator zip allEdges;
@@ -97,7 +97,7 @@ class Factor[V:Order,F,P]
         }
       case _ => List()
     }.flatten[SubEdge]
-    initEdges(List() ++ neqSubEdges ++ litSubEdges)
+    initEdges(apart,neqSubEdges.toList ++ litSubEdges)
   }
 
   private type Factor              = (List[Edge], Subst[V,Term[V,F]])
