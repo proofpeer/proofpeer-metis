@@ -23,10 +23,10 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
   case class Equality(
     p: Literal.TermCursor[V,F,P],
     tm: Term[V,F]) extends Inference
-  case class RemoveSym[V,F,P](thm: Thm) extends Inference
-  case class Irreflexive[V,F,P](thm: Thm) extends Inference
+  case class RemoveSym(thm: Thm) extends Inference
+  case class Irreflexive(thm: Thm) extends Inference
   case class InfSubst(θ: Subst[V,Term[V,F]], thm: Thm) extends Inference
-  case class Resolve[V,F,P](pos: Thm, neg: Thm) extends Inference
+  case class Resolve(atom: Atom[V,F,P], pos: Thm, neg: Thm) extends Inference
 
   case class Thm private[Kernel](clause: Clause[V,F,P], rule: Inference) {
     def isTautology     = clause.isTautology
@@ -103,7 +103,9 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
     val negLit = lit.negate
     if (thm1.clause.contains(lit) && thm2.clause.contains(negLit)) {
       val cl = (thm1.clause - lit) ++ (thm2.clause - negLit)
-      Some(Thm(Clause(cl), Resolve(thm1,thm2)))
+      Some(Thm(Clause(cl),
+        if (lit.isPositive) Resolve(lit.atom,thm1,thm2)
+        else Resolve(negLit.atom,thm2,thm1)))
     }
     else None
   }
@@ -137,8 +139,7 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
     }).getOrBug(
       "Refl should produce an equality")
     val (_,_,yx) = equality(xxLit,y)
-    resolve(xxLit.top,xx,yx).getOrBug(
-      throw new Exception("Sym"))
+    resolve(xxLit.top,xx,yx).getOrBug("Sym")
   }
 
   type ST[A] = State[Thm,A]
