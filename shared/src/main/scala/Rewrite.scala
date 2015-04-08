@@ -66,8 +66,6 @@ case class METISRewriting[V:Order,F:Order,P,FV,K<:Kernel[V,F,P]](kernel: K)(
       // rules, he always converts. But as of now, weakening this leads to infinite
       // loops.
       if (kbo.tryCompare(redex_,redux_) === Some(Ordering.GT)))
-//      _ = System.out.println(kbo.tryCompare(redex_,redux_) === Some(Ordering.GT));
-//      _ = System.out.println("And so I yield"))
     yield (redux_,directedEql.subst(θ))
   }
 
@@ -328,7 +326,6 @@ case class METISRewriting[V:Order,F:Order,P,FV,K<:Kernel[V,F,P]](kernel: K)(
 
       newEquation match {
         case None =>
-//          System.out.println("Baleete: " + Debug.stringClause(known(thmId).eql.clause))
           (new Rewriter(
             this.known - thmId,
             this.redexes,
