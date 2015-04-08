@@ -160,8 +160,8 @@ case class IThmFactory[V:Order,F:Order,P:Order,FV,K<:Kernel[V,F,P]](
       θ <- lit1.unify(Subst.empty[V,Term[V,F]],nlit2).headOption;
       lit1_  = lit1.subst(θ);
       nlit2_ = lit1.negate;
-      thm1_ = thm1.subst(θ);
-      thm2_ = thm2.subst(θ);
+      thm1_  = thm1.subst(θ);
+      thm2_  = thm2.subst(θ);
       if litOrder.isMaximal(thm1_.clause)(lit1_);
       if litOrder.isMaximal(thm2_.clause)(nlit2_);
       resolvent <- kernel.resolve(lit1_,thm1_,thm2_))
