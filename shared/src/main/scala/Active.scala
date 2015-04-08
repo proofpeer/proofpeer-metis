@@ -137,7 +137,10 @@ case class ActiveFactory[
     def simplify(ithm: ithmF.IThm) =
       for (
         simped    <- ithm.simplify;
-        rewritten <- rewrite(simped).getOrElse(simped).simplify;
+        rewritten <- rewrite(simped) match {
+          case None       => Some(simped)
+          case Some(rewr) => rewr.simplify
+        };
         resolved  = resolveUnits(rewritten);
         if !subsume.isStrictlySubsumed(resolved.clause)
       )
