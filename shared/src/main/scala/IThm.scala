@@ -46,8 +46,7 @@ case class IThmFactory[V:Order,F:Order,P:Order,FV,K<:Kernel[V,F,P]](
           case NeqLit(l,r) if l != r => l.unify(Subst.empty,r).headOption
           case _                     => None
         }.find (_.isDefined).flatten
-      firstSubst.map(thm.subst(_))
-        .getOrElse(thm.removeIrrefl)
+      firstSubst.map(thm.subst(_)).getOrElse(thm).removeIrrefl
     }
 
     /** Simplify: chuck out if its a tautology. Otherwise expand all abbreviations
