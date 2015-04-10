@@ -17,7 +17,7 @@ object Atom {
     rargs: List[Term[V,F]]) extends TermCursor[V,F,P] {
 
     /** Argument path from theTop to the cursor. */
-    override def path = cursor.path :+ largs.length
+    override def path = largs.length +: cursor.path
 
     override def get = cursor.get
     override def replaceWith(replacement: Term[V,F]) =
