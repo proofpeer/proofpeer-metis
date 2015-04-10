@@ -181,7 +181,9 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
         (oldLit,newTmC,eqlThm) = equality(tmC,newTm);
         thm                    = resolve(eqLit,eql,eqlThm).getOrBug(
           "Invalid conversion");
-        newThm                 = resolve(oldLit,oldThm,thm).getOrBug(
+        // In case we try to convert the lhs of x = y with that same equation.
+        thm_                   = if (thm.clause.lits.size == 1) eqlThm else thm;
+        newThm                 = resolve(oldLit,oldThm,thm_).getOrBug(
           "Should be able to resolve on new literal");
         ()   <- put[Thm](newThm).liftM)
       yield newTmC
