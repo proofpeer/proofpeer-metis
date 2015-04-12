@@ -64,12 +64,13 @@ trait MatchableTerm[V,T,GT] { this: GT =>
 }
 
 trait Cursored[V,T,GT,C <: GenCursor[V,T,GT,C]] { this: GT =>
-  def top: Option[C]
+  def topLeft: Option[C]
 
   def allSubterms: List[C] =
     for (
-      t  <- top.toList;
-      st <- t.allSubterms
+      t   <- topLeft.toList;
+      sib <- t :: t.siblings;
+      st  <- sib.allSubterms
     )
     yield st
 }
@@ -92,6 +93,9 @@ trait GenCursor[V,T,GT,C <: GenCursor[V,T,GT,C]] { this: C =>
   def children: List[C] = {
     down.toList >>= (loopCollect(_)(c => c.right))
   }
+
+  def siblings: List[C] =
+    loopCollect(this)(_.left) ++ loopCollect(this)(_.right)
 
   def path: Vector[Int]
 

@@ -72,12 +72,12 @@ case class Clause[V,F,P](lits: Set[Literal[V,F,P]])
     new Clause(lits.map(_.subst(θ)))
   override def heuristicSize = lits.toList.map(_.heuristicSize).sum
 
-  override def top =
+  override def topLeft =
     lits.toList match {
       case List()    => None
       case lit::lits =>
-        lit.top.map {
-          top => Clause.TermCursor(List(),top,lits)
+        lit.topLeft.map {(
+          top => Clause.TermCursor(List(),top,lits))
         }
     }
 

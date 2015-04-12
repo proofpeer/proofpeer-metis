@@ -35,7 +35,7 @@ object Atom {
         largs match {
           case List()      => None
           case larg::largs =>
-            larg.top.map { top => PredCursor(p,largs,top,cursor.top::rargs) }
+            larg.topLeft.map { top => PredCursor(p,largs,top,cursor.top::rargs) }
         }
     }
     override def right = {
@@ -45,7 +45,7 @@ object Atom {
         rargs match {
           case List()      => None
           case rarg::rargs =>
-            rarg.top.map { top => PredCursor(p,cursor.top::largs,top,rargs) }
+            rarg.topLeft.map { top => PredCursor(p,cursor.top::largs,top,rargs) }
         }
     }
     override def up    = cursor.up.map(PredCursor(p,largs,_,rargs))
@@ -67,7 +67,7 @@ object Atom {
     override def right =
       if (cursor.up.isDefined)
         cursor.right.map(LHSCursor(_,rhs))
-      else rhs.top.map { RHSCursor(cursor.top,_) }
+      else rhs.topLeft.map { RHSCursor(cursor.top,_) }
     override def up    = cursor.up.map(LHSCursor(_,rhs))
     override def top   = Eql(cursor.top,rhs)
   }
@@ -85,7 +85,7 @@ object Atom {
     override def left  =
       if (cursor.up.isDefined)
         cursor.left.map(RHSCursor(lhs,_))
-      else lhs.top.map(LHSCursor(_,cursor.top))
+      else lhs.topLeft.map(LHSCursor(_,cursor.top))
     override def right = cursor.right.map(RHSCursor(lhs,_))
     override def up    = cursor.up.map(RHSCursor(lhs,_))
     override def top   = Eql(lhs,cursor.top)
@@ -153,13 +153,13 @@ abstract sealed class Atom[V,F,P]
     case Eql(x,y)     => x.heuristicSize + y.heuristicSize
   })
 
-  override def top = {
+  override def topLeft = {
     this match {
       case eq@Eql(x,y) =>
-        x.top.map(Atom.LHSCursor[V,F,P](_,y))
+        x.topLeft.map(Atom.LHSCursor[V,F,P](_,y))
       case Pred(p,List())    => None
       case Pred(p,arg::args) =>
-        arg.top.map { top => Atom.PredCursor(p,List(),top,args) }
+        arg.topLeft.map { top => Atom.PredCursor(p,List(),top,args) }
     }
   }
 

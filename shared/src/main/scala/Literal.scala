@@ -57,7 +57,8 @@ case class Literal[V,F,P](isPositive: Boolean, atom: Atom[V,F,P])
     else List()
   override def heuristicSize = atom.heuristicSize
 
-  override def top = atom.top.map { new Literal.TermCursor(this.isPositive,_) }
+  override def topLeft =
+    atom.topLeft.map { new Literal.TermCursor(this.isPositive,_) }
 
   /** Is this literal of the form x=x? */
   def isRefl = isPositive && atom.isRefl

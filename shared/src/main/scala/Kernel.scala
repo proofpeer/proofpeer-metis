@@ -135,7 +135,7 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
   def sym(x: Term[V,F], y: Term[V,F]) = {
     val xx = refl(x);
     val xxLit = (xx.clause.headOption >>= {
-      lit => lit.top.headOption
+      lit => lit.topLeft.headOption
     }).getOrBug(
       "Refl should produce an equality")
     val (_,_,yx) = equality(xxLit,y)
@@ -220,7 +220,7 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
     lit:  Literal[V,F,P],
     conv: Term[V,F] => Option[(Term[V,F], Thm)]) = {
     for (
-      tmC          <- lit.top;
+      tmC          <- lit.topLeft;
       (thm,newTmC)  = termConv(conv)(tmC).run(assume(lit));
       newLit       <- newTmC.map(_.top))
     yield (thm,newLit)

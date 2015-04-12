@@ -184,7 +184,7 @@ abstract sealed class Term[V,F]
     }
   }
 
-  override def top: Option[Term.TermCursor[V,F]] = Some(Term.Top(this))
+  override def topLeft: Option[Term.TermCursor[V,F]] = Some(Term.Top(this))
 }
 
 case class Var[V,F](v: V) extends Term[V,F]
