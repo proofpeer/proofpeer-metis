@@ -30,7 +30,7 @@ object Clause {
       else
         largs match {
           case List()      => None
-          case larg::largs => larg.top.map {
+          case larg::largs => larg.topLeft.map {
             top => TermCursor(largs,top,cursor.top::rargs)
           }
         }
@@ -41,7 +41,7 @@ object Clause {
       else
         rargs match {
           case List()      => None
-          case rarg::rargs => rarg.top.map {
+          case rarg::rargs => rarg.topLeft.map {
             top => TermCursor(cursor.top::largs,top,rargs)
           }
         }
