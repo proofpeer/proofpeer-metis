@@ -10,7 +10,8 @@ import scalaz._
 import Scalaz._
 
 class TermParsers extends StandardTokenParsers {
-  lexical.delimiters += ("(",")",",","=","~")
+  lexical.delimiters += ("(",")",",",".","=","~","|")
+  lexical.reserved   += "fof"
 
   type StringTerm = Term[String,String]
   type StringAtom = Atom[String,String,String]
@@ -19,6 +20,7 @@ class TermParsers extends StandardTokenParsers {
   private val parseUpcaseId = {
     acceptIf {
       case lexical.Identifier(chars) => new StringOps(chars)(0).isUpper
+      case _ => false
     } {
       case _ => "Upper-case identifier expected."
     }
@@ -27,6 +29,7 @@ class TermParsers extends StandardTokenParsers {
   private val parseLowcaseId = {
     acceptIf {
       case lexical.Identifier(chars) => new StringOps(chars)(0).isLower
+      case _ => false
     } {
       case _ => "Lower-case identifier expected."
     }
@@ -39,11 +42,11 @@ class TermParsers extends StandardTokenParsers {
 
   val parseTerm:Parser[StringTerm] = {
     (for {
-      id   <- parseUpcaseId
+      id   <- parseLowcaseId
       args <- parseArgs
     }
     yield Fun(id.chars,args)) |
-    parseLowcaseId.map { id => Var(id.chars) }
+    parseUpcaseId.map { id => Var(id.chars) }
   }
 
   val parseAtom:Parser[StringAtom] = {
@@ -54,10 +57,10 @@ class TermParsers extends StandardTokenParsers {
     }
     yield Eql[String,String,String](lhs,rhs)) |
     (for {
-      id   <- this.ident
+      id   <- parseLowcaseId
       args <- parseArgs
     }
-    yield Pred(id,args))
+    yield Pred(id.chars,args))
   }
 
   def parseMaybeBracketed[A](parser: Parser[A]):Parser[A] = {
@@ -68,4 +71,15 @@ class TermParsers extends StandardTokenParsers {
     ("~" ~> parseMaybeBracketed(parseAtom)).map { atm => Literal(false,atm) } |
     parseMaybeBracketed(parseAtom).map { atm => Literal(true,atm) }
   }
+
+  val parseCNF:Parser[(String,String,List[StringLit])] =
+    "fof" ~> "(" ~> (for {
+      name <- parseLowcaseId.map(_.chars) | numericLit;
+      if (name.charAt(0) != '-');
+      role <- "," ~> ident <~ ",";
+      lits <- repsep(parseLit,"|") <~ ")" <~ "."
+    }
+    yield (name,role,lits))
+
+  val parseCNFs:Parser[List[(String,String,List[StringLit])]] = parseCNF.*
 }
