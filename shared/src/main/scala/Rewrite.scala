@@ -7,7 +7,7 @@ import scalaz._
 import Scalaz._
 
 /** KBO-based rewriting system as implemented in METIS. */
-case class METISRewriting[V:Order,F:Order,P,FV,K<:Kernel[V,F,P]](kernel: K)(
+case class METISRewriting[V:Order,F:Order,P,K<:Kernel[V,F,P]](kernel: K)(
   implicit ordFun: Order[Fun[V,F]]) {
 
   import ClauseInstances._
@@ -123,6 +123,8 @@ case class METISRewriting[V:Order,F:Order,P,FV,K<:Kernel[V,F,P]](kernel: K)(
         new Nets.TermNet[F,(Int,Cursor)],
         Set[Int]())
 
+    def isKnown(id: Int) = known.contains(id)
+
     def isReduced = waiting.isEmpty
 
     def add(id: Int, eqn: Equation) = {
@@ -198,20 +200,16 @@ case class METISRewriting[V:Order,F:Order,P,FV,K<:Kernel[V,F,P]](kernel: K)(
     // Given a clause, interreduce all negated (conditional) equalities with the
     // main rewrites, and use the final interreduced set of rewrites against all
     // literals in the clause.
-    // TODO: I think this is mostly dead code. Hurd's METIS only ever adds
-    // unit equalities into the rewriter. Damn.
     def interRewriteNeqs(thm: kernel.Thm, id: Int) = {
 
       val (map,lits) = mkNeqConvMap(thm.clause)
 
       def interRewrite1(
         acc: (NeqConvMap, Set[Literal[V,F,P]], kernel.Thm, Boolean),
-        kv: (Literal[V,F,P], Conv)) = {
-        val (key,_)    = kv
+        key: Literal[V,F,P]) = {
         val (map, lits, thm, changed) = acc
         mkNeqRule(id,map)(key).map { case (litConvThm,newLit) =>
-          mkNeqRule(id,map)(key)
-          val newThm = kernel.resolve(newLit,litConvThm,thm).get
+          val newThm = kernel.resolve(key,thm,litConvThm).get
           newLit match {
             case NeqLit(l,r) =>
             mkNeqConv(l,r) match {
@@ -230,7 +228,7 @@ case class METISRewriting[V:Order,F:Order,P,FV,K<:Kernel[V,F,P]](kernel: K)(
         thm: kernel.Thm):
           (NeqConvMap, Set[Literal[V,F,P]], kernel.Thm) = {
         val (newMap, newLits, newThm, changed) =
-          map.foldLeft((map, lits, thm, false))(interRewrite1)
+          map.keys.foldLeft((map, lits, thm, false))(interRewrite1)
         if (changed)
           interRewrite(newMap, newLits, newThm)
         else (map,lits,newThm)
@@ -243,8 +241,9 @@ case class METISRewriting[V:Order,F:Order,P,FV,K<:Kernel[V,F,P]](kernel: K)(
       val finalThm = lits.foldLeft(newThm) {
         case (accThm,lit) =>
           if (newThm.clause.contains(lit))
-            (neqRule(lit) >>= { case (convThm,_) =>
-              kernel.resolve(lit,convThm,accThm)
+            (neqRule(lit).map { case (convThm,_) =>
+              kernel.resolve(lit,accThm,convThm).getOrBug(
+                "Invalid conversion.")
             }).getOrElse(accThm)
           else accThm
       }

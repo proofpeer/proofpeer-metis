@@ -17,14 +17,17 @@ import Scalaz._
   * @param nextV     state-based generator of fresh variables
   * @param initState initial state for the fresh variable generator
   */
-case class IThmFactory[V:Order,F:Order,P:Order,FV,K<:Kernel[V,F,P]](
+case class IThmFactory[
+  V:Order,F:Order,P:Order,FV,
+  K<:Kernel[V,F,P]](
   kernel: K,
-  initState: FV,
-  nextV : (FV,V) => (FV,V),
-  litOrder: LiteralOrdering[V,F,P],
-  factorClause: Clause[V,F,P] => Iterator[Subst[V,Term[V,F]]])(implicit
-    termOrd: PartialOrder[Term[V,F]]) {
+    initState: FV,
+    nextV: (FV,V) => (FV,V),
+    litOrder: LiteralOrdering[V,F,P],
+    factorClause: Clause[V,F,P] => Iterator[Subst[V,Term[V,F]]])(implicit
+      termOrd: PartialOrder[Term[V,F]],ordFun: Order[Fun[V,F]]) {
 
+  val rewriting = METISRewriting[V,F,P,kernel.type](kernel)
   var theState = initState
 
   /** Theorems with identifiers. All instance methods return new theorems but
@@ -43,7 +46,8 @@ case class IThmFactory[V:Order,F:Order,P:Order,FV,K<:Kernel[V,F,P]](
     private def expandAbbrevs(thm: kernel.Thm) = {
       val firstSubst =
         thm.clause.toIterator.map {
-          case NeqLit(l,r) if l != r => l.unify(Subst.empty,r).headOption
+          case NeqLit(l,r) if l != r =>
+            l.unify(Subst.empty,r).headOption
           case _                     => None
         }.find (_.isDefined).flatten
       firstSubst.map(thm.subst(_)).getOrElse(thm).removeIrrefl
@@ -66,6 +70,15 @@ case class IThmFactory[V:Order,F:Order,P:Order,FV,K<:Kernel[V,F,P]](
         }
       }
       simp(this.thm).map { new IThm(this.id,_) }
+    }
+
+    def rewrite(rewriter: rewriting.Rewriter) = {
+      if (rewriter.isKnown(this.id) || rewriter.isReduced)
+        this
+      else {
+        val (newThm, newId) = rewriter.interRewriteNeqs(this.thm, this.id)
+        IThm(newId, newThm)
+      }
     }
 
     /** Largest rewrites in a theorem. */

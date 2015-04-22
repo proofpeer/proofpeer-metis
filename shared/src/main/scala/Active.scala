@@ -16,10 +16,7 @@ case class ActiveFactory[
   ITF<:IThmFactory[V,F,P,FV,K]](
   ithmF: ITF,
   litOrder: LiteralOrdering[V,F,P],
-  subsumer: Subsuming[V,F,P,Int])(
-  implicit ordFun: Order[Fun[V,F]], termOrd: PartialOrder[Term[V,F]]) {
-
-  val rewriting = METISRewriting[V,F,P,FV,ithmF.kernel.type](ithmF.kernel)
+  subsumer: Subsuming[V,F,P,Int]) {
 
   import ClauseInstances._
 
@@ -36,7 +33,7 @@ case class ActiveFactory[
   // Used to check if an equation can be used for some rewriting.
   case class Active(
     clauses:     Map[Int,ithmF.IThm],
-    rewriter:    rewriting.Rewriter,
+    rewriter:    ithmF.rewriting.Rewriter,
     units:       Nets.LiteralNet[F,P,ithmF.UnitIThm],
     subsume:     subsumer.Subsume,
     literals:    Nets.LiteralNet[F,P,(Literal[V,F,P],ithmF.IThm)],
@@ -47,7 +44,7 @@ case class ActiveFactory[
     def this() {
       this(
         Map(),
-        new rewriting.Rewriter,
+        new ithmF.rewriting.Rewriter,
         new Nets.LiteralNet,
         new subsumer.Subsume,
         new Nets.LiteralNet,
@@ -131,17 +128,13 @@ case class ActiveFactory[
       }
     }
 
-    def rewrite(ithm: ithmF.IThm) =
-      ithm.repeatTopDownConvRule(rewriter.rewr(ithm.id))
-
     def simplify(ithm: ithmF.IThm) =
       for (
-        simped    <- ithm.simplify;
-        rewritten <- rewrite(simped) match {
-          case None       => Some(simped)
-          case Some(rewr) => rewr.simplify
-        };
-        resolved  = resolveUnits(rewritten);
+        simped     <- ithm.simplify;
+        rewritten1 =  simped.rewrite(rewriter);
+        rewritten  <- if (simped == rewritten1) Some(simped)
+                      else rewritten1.simplify;
+        resolved   = resolveUnits(rewritten);
         if !subsume.isStrictlySubsumed(resolved.clause)
       )
       yield resolved
@@ -181,7 +174,7 @@ case class ActiveFactory[
   def addFactorSW(ithm: ithmF.IThm): SW[Unit] =
     for (
       active <- getSW;
-      newRewriter = rewriting.Equation.ofThm(ithm.thm) match {
+      newRewriter = ithmF.rewriting.Equation.ofThm(ithm.thm) match {
         case Some(eqn) => active.rewriter.add(ithm.id,eqn)
         case None      => active.rewriter
       };
@@ -214,7 +207,7 @@ case class ActiveFactory[
 
   def findRewritables(active: Active) = {
     active.clauses.values.toSet.filter { ithm =>
-      active.rewrite(ithm).filter (_ != ithm).isDefined
+      ithm.rewrite(active.rewriter) != ithm
     }
   }
 
