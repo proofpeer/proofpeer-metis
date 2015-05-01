@@ -39,7 +39,7 @@ object Debug {
     for (
       c       <- ascii;
       escaped <- if (c == '0') "00"
-                 else if (c.isLetter || c.isDigit) c.toString
+                 else if (c.isLetterOrDigit) c.toString
                  else "0" ++ c.toInt.shows)
     yield escaped
   }
@@ -60,10 +60,10 @@ object Debug {
     atom match {
       case Eql(x,y) =>
         TPTPOfTerm(x) ++ "=" ++ TPTPOfTerm(y)
-      case Pred(p,List()) => Cord("p") ++ Cord(toAlphaNum(p.shows))
+      case Pred(p,List()) => Cord("f") ++ Cord(toAlphaNum(p.shows))
       case Pred(p,args) =>
         val argsStrs = args.map(TPTPOfTerm(_))
-        Cord("p") ++ Cord(toAlphaNum(p.shows)) ++ Cord("(") ++
+        Cord("f") ++ Cord(toAlphaNum(p.shows)) ++ Cord("(") ++
         Cord.mkCord(",",argsStrs:_*) ++ Cord(")")
     }
 
