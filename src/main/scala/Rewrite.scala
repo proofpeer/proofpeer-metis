@@ -169,7 +169,7 @@ case class METISRewriting[V:Order,F:Order,P,K<:Kernel[V,F,P]](kernel: K)(
         case Ordering.LT =>
           Some { term:Term[V,F] =>
             if (term == r)
-              Some(r,kernel.sym(l,r))
+              Some(l,kernel.sym(l,r))
             else None
           }
         case Ordering.EQ => None
@@ -208,16 +208,17 @@ case class METISRewriting[V:Order,F:Order,P,K<:Kernel[V,F,P]](kernel: K)(
         acc: (NeqConvMap, Set[Literal[V,F,P]], kernel.Thm, Boolean),
         key: Literal[V,F,P]) = {
         val (map, lits, thm, changed) = acc
-        mkNeqRule(id,map)(key).map { case (litConvThm,newLit) =>
+        val newMap = map - key
+        mkNeqRule(id,newMap)(key).map { case (litConvThm,newLit) =>
           val newThm = kernel.resolve(key,thm,litConvThm).get
           newLit match {
-            case NeqLit(l,r) =>
+          case NeqLit(l,r) =>
             mkNeqConv(l,r) match {
               case Some(conv) =>
-                (map - key + (newLit → conv), lits, newThm, true)
-              case None       => (map - key, lits + key, thm, changed)
+                (newMap + (newLit → conv), lits, newThm, true)
+              case None => (newMap, lits + key, thm, changed)
             }
-            case _ => (map - key, lits + key, thm, changed)
+          case _ => (map, lits + key, thm, changed)
           }
         }.getOrElse(acc)
       }
