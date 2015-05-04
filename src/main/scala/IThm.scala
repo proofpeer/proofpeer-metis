@@ -88,10 +88,10 @@ case class IThmFactory[
       *  -------------- resolveUnit L, where M is matched to the negation of L.
       *         C
       */
-    def resolveUnit(lit: Literal[V,F,P], iunit: UnitIThm) = {
+    def resolveUnit(lit: Literal[V,F,P], unit: kernel.UnitThm) = {
       for (
-        θ       <- iunit.lit.patMatch(Subst.empty,lit.negate).headOption;
-        unitThm = iunit.ithm.thm.subst(θ);
+        θ       <- unit.lit.patMatch(Subst.empty,lit.negate).headOption;
+        unitThm =  unit.thm.subst(θ);
         unitLit = unitThm.clause.lits.toList match {
           case List(unitLit_) => unitLit_
           case _              => throw new Error(
@@ -187,14 +187,6 @@ case class IThmFactory[
     for (
       θ <- factorClause(Clause(ithm.clause.largestLiterals(litOrder))).toList)
     yield new IThm(ithm.id, ithm.thm.subst(θ))
-  }
-
-  case class UnitIThm private[IThmFactory](lit:Literal[V,F,P], ithm: IThm)
-
-  /** Destruct a clause of exactly one literal. */
-  object UnitIThm {
-    def getUnit(ithm: IThm): Option[UnitIThm] =
-      ithm.clause.lits.singleton.map { UnitIThm(_,ithm) }
   }
 
   /** A cursor to a rewrite in an IThm */

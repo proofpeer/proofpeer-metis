@@ -177,6 +177,7 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
         oldThm <- get[Thm].liftM;
         conved <- conv(tmC.get).liftOpt;
         (newTm,eql) = conved;
+        if tmC.get != newTm;
         eqLit                  = Literal(true,Eql[V,F,P](tmC.get,newTm));
         (oldLit,newTmC,eqlThm) = equality(tmC,newTm);
         thm                    = resolve(eqLit,eql,eqlThm).getOrBug(
@@ -237,5 +238,13 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
       val cursor_ = clauseCursor.subst(θ)
       TermCursor(Thm(cursor_.top,InfSubst(θ,top)),cursor_)
     }
+  }
+
+  case class UnitThm(lit:Literal[V,F,P], thm: Thm)
+
+  /** Destruct a clause of exactly one literal. */
+  object UnitThm {
+    def getUnit(thm: Thm): Option[UnitThm] =
+      thm.clause.lits.singleton.map { UnitThm(_,thm) }
   }
 }

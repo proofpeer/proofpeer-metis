@@ -34,7 +34,7 @@ case class ActiveFactory[
   case class Active(
     clauses:     Map[Int,ithmF.IThm],
     rewriter:    ithmF.rewriting.Rewriter,
-    units:       Nets.LiteralNet[F,P,ithmF.UnitIThm],
+    units:       Nets.LiteralNet[F,P,ithmF.kernel.UnitThm],
     subsume:     subsumer.Subsume,
     literals:    Nets.LiteralNet[F,P,(Literal[V,F,P],ithmF.IThm)],
     equations:   Nets.TermNet[F,(ithmF.RewriteCursor,ithmF.IThm)],
@@ -118,8 +118,8 @@ case class ActiveFactory[
       def resolve1(thm: ithmF.IThm, lit: Literal[V,F,P]):
           List[ithmF.IThm] = {
         for (
-          unitIThm  <- units.matches(lit.negate);
-          resolvent <- thm.resolveUnit(lit,unitIThm).toList
+          unitThm   <- units.matches(lit.negate);
+          resolvent <- thm.resolveUnit(lit,unitThm).toList
         )
         yield resolvent
       }
@@ -178,9 +178,16 @@ case class ActiveFactory[
         case Some(eqn) => active.rewriter.add(ithm.id,eqn)
         case None      => active.rewriter
       };
-      newUnits = ithmF.UnitIThm.getUnit(ithm) match {
-        case Some(unit@ithmF.UnitIThm(lit,_)) =>
-          active.units.insert(lit,unit)
+      newUnits = ithmF.kernel.UnitThm.getUnit(ithm.thm) match {
+        case Some(unit@ithmF.kernel.UnitThm(lit@Literal(pol,Eql(x,y)),_)) =>
+          val sym    = if (pol) ithmF.kernel.sym(x,y) else ithmF.kernel.sym(y,x)
+          val symLit = Literal(pol,Eql[V,F,P](y,x))
+          val symThm =
+            ithmF.kernel.UnitThm.getUnit(
+              ithmF.kernel.resolve(lit,unit.thm,sym).getOrBug(
+                "Should be able to sym the theorem ")).getOrBug(
+              "Should resolve to a unit theorem")
+          active.units.insert(lit,unit).insert(symLit,symThm)
         case _ => active.units;
       };
       newSubsumer = active.subsume.insert(ithm.clause,ithm.id);
@@ -215,7 +222,6 @@ case class ActiveFactory[
     val ids = ithms.map(_.id)
     modifySW { active => active.copy (
       clauses     = active.clauses.filterKeys(!ids(_)),
-      units       = active.units.filter { unit => !ids(unit.ithm.id) },
       subsume     = active.subsume.filter(!ids(_)),
       literals    = active.literals.filter    { case (_,ithm) => !ids(ithm.id) },
       equations   = active.equations.filter   { case (_,ithm) => !ids(ithm.id) },
@@ -259,10 +265,10 @@ case class ActiveFactory[
     fact(ithms).written.run(initActive)
   }
 
-  def isUnitEql(thm: ithmF.IThm) =
-    ithmF.UnitIThm.getUnit(thm) match {
-      case Some(ithmF.UnitIThm(Literal(true,Eql(_,_)),_)) => true
-      case _                                              => false
+  def isUnitEql(ithm: ithmF.IThm) =
+    ithmF.kernel.UnitThm.getUnit(ithm.thm) match {
+      case Some(ithmF.kernel.UnitThm(Literal(true,Eql(_,_)),_)) => true
+      case _                                                    => false
     }
 
   def sortUtilityWise(thms: List[ithmF.IThm]) =
