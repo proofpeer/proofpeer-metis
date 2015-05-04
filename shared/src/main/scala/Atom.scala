@@ -56,7 +56,7 @@ object Atom {
     cursor: Term.TermCursor[V,F],
     rhs: Term[V,F]) extends TermCursor[V,F,P] {
 
-    override def path = cursor.path :+ 0
+    override def path = 0 +: cursor.path
     override def get = cursor.get
     override def replaceWith(replacement: Term[V,F]) =
       LHSCursor(cursor.replaceWith(replacement),rhs)
@@ -75,7 +75,7 @@ object Atom {
   case class RHSCursor[V,F,P] private[Atom](
     lhs: Term[V,F],
     cursor: Term.TermCursor[V,F]) extends TermCursor[V,F,P] {
-    override def path = cursor.path :+ 1
+    override def path = 1 +: cursor.path
     override def get = cursor.get
     override def replaceWith(replacement: Term[V,F]) =
       RHSCursor(lhs,cursor.replaceWith(replacement))
