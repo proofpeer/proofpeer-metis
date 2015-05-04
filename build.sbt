@@ -17,6 +17,6 @@ libraryDependencies += "org.scalaz" %% "scalaz-core" % "latest.integration",
 libraryDependencies += "org.scalatest" %% "scalatest" % "latest.integration"
 ).
 jsSettings(
-libraryDependencies += "com.github.japgolly.fork.scalaz" %%% "scalaz-core" % "latest.integration" )
+libraryDependencies += "com.github.japgolly.fork.scalaz" %%% "scalaz-core" % "7.1.1" )
 lazy val metisJVM = metis.jvm
 lazy val metisJS = metis.js
