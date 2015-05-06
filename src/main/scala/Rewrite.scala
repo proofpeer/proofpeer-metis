@@ -186,14 +186,25 @@ case class METISRewriting[V:Order,F:Order,P,K<:Kernel[V,F,P]](kernel: K)(
       }
     }
 
+    def orElseC(conv1: Conv, conv2: Conv): Conv =
+      tm => conv1(tm).orElse(conv2(tm))
+
+    def collectFirstOpt[A,B](xs: TraversableOnce[A])(f: A => Option[B]):
+        Option[B] = {
+      for (x <- xs)
+        f(x) match {
+          case None  =>
+          case y     => return y
+        }
+      None
+    }
+
     // Apply the first successful conversion in the map
     def neqConvToConv(map: NeqConvMap) : Conv =
-      tm => map.collectFirst { case (_,conv) => conv(tm) }.flatten
+      tm => collectFirstOpt(map) { case (_,conv) => conv(tm) }
 
     def mkNeqRule(id: Int, map: NeqConvMap)(lit: Literal[V,F,P]) = {
-      val neqConv    = Function.unlift(neqConvToConv(map))
-      val rewrConv   = Function.unlift(rewr(id))
-      val conv       = neqConv.orElse(rewrConv).lift
+      val conv = orElseC(neqConvToConv(map),rewr(id))
       kernel.repeatTopDownConvRule(lit,conv)
     }
 
@@ -209,18 +220,24 @@ case class METISRewriting[V:Order,F:Order,P,K<:Kernel[V,F,P]](kernel: K)(
         key: Literal[V,F,P]) = {
         val (map, lits, thm, changed) = acc
         val newMap = map - key
-        mkNeqRule(id,newMap)(key).map { case (litConvThm,newLit) =>
-          val newThm = kernel.resolve(key,thm,litConvThm).get
-          newLit match {
-          case NeqLit(l,r) =>
-            mkNeqConv(l,r) match {
-              case Some(conv) =>
-                (newMap + (newLit → conv), lits, newThm, true)
-              case None => (newMap, lits + key, thm, changed)
+
+        val newAcc =
+          for (
+            (litConvThm,newLit) <- mkNeqRule(id,newMap)(key);
+            if newLit != key;
+            newThm = kernel.resolve(key,thm,litConvThm).get)
+          yield
+            newLit match {
+              case NeqLit(l,r) =>
+                mkNeqConv(l,r) match {
+                  case Some(conv) =>
+                    (newMap + (newLit → conv), lits, newThm, true)
+                  case None => (newMap, lits + key, newThm, changed)
+                }
+              case _ => (newMap, lits + key, thm, changed)
             }
-          case _ => (map, lits + key, thm, changed)
-          }
-        }.getOrElse(acc)
+
+        newAcc.getOrElse(acc)
       }
 
       def interRewrite(
@@ -249,7 +266,7 @@ case class METISRewriting[V:Order,F:Order,P,K<:Kernel[V,F,P]](kernel: K)(
           else accThm
       }
 
-      (finalThm,id)
+      finalThm
     }
 
     def rewriteEqn(thmId: Int, eqn: Equation) = {
