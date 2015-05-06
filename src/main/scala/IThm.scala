@@ -73,12 +73,11 @@ case class IThmFactory[
     }
 
     def rewrite(rewriter: rewriting.Rewriter) = {
-      if (rewriter.isKnown(this.id) || rewriter.isReduced)
-        this
-      else {
-        val (newThm, newId) = rewriter.interRewriteNeqs(this.thm, this.id)
-        IThm(newId, newThm)
+      if (rewriter.isKnown(this.id) <= !rewriter.isReduced) {
+        val newThm = rewriter.interRewriteNeqs(this.thm, this.id)
+        IThm(this.id, newThm)
       }
+      else this
     }
 
     /** Largest rewrites in a theorem. */
