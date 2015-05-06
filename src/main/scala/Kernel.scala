@@ -16,7 +16,24 @@ import Scalaz._
 */
 sealed class Kernel[V:Order,F:Order,P:Order] {
 
-  sealed abstract class Inference
+  sealed abstract class Inference {
+    def depth: Int =
+      1 + (this match {
+        case RemoveSym(thm)       => thm.rule.depth
+        case Irreflexive(thm)     => thm.rule.depth
+        case InfSubst(_,thm)      => thm.rule.depth
+        case Resolve(_,thm1,thm2) => thm1.rule.depth.max(thm2.rule.depth)
+        case _ => 0
+      })
+    def size: Int =
+      1 + (this match {
+        case RemoveSym(thm)       => thm.rule.size
+        case Irreflexive(thm)     => thm.rule.size
+        case InfSubst(_,thm)      => thm.rule.size
+        case Resolve(_,thm1,thm2) => thm1.rule.depth + thm2.rule.size
+        case _ => 0
+      })
+  }
   case class Axiom() extends Inference
   case class Assume() extends Inference
   case class Refl() extends Inference
@@ -36,10 +53,12 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
       *  -------- subst θ
       *   this[θ]
       */
-    def subst(θ: Subst[V,Term[V,F]]): Thm =
-      // For now, removing optimisation where, if the entire clause is unchanged, we
-      // do not return a newly constructed clause.
-      Thm(Clause(clause.subst(θ)),InfSubst(θ,this))
+    def subst(θ: Subst[V,Term[V,F]]): Thm = {
+      val newCl = clause.subst(θ)
+      if (newCl == clause)
+        this
+      else Thm(newCl,InfSubst(θ,this))
+    }
 
     /**      C ∨ ~(x = x)
       *  ------------------- removeIrrefl
@@ -183,7 +202,7 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
         thm                    = resolve(eqLit,eql,eqlThm).getOrBug(
           "Invalid conversion");
         // In case we try to convert the lhs of x = y with that same equation.
-        thm_                   = if (thm.clause.lits.size == 1) eqlThm else thm;
+        thm_                   = if (oldLit == eqLit) eqlThm else thm;
         newThm                 = resolve(oldLit,oldThm,thm_).getOrBug(
           "Should be able to resolve on new literal");
         ()   <- put[Thm](newThm).liftM)
