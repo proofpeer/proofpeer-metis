@@ -64,9 +64,9 @@ object Term {
             ctx.map(substLevel(_)))
       }
     }
-    override def path = {
+    override def path: Vector[Int] = {
       val hpos = util.Fun.unfoldW(this)(_.left.map(x => (x,1)))
-      up.map(_.path).getOrElse(Vector()) :+ hpos
+      up.map(_.path :+ hpos).getOrElse(Vector())
     }
     override def top =
       util.Fun.loop1(this)(u => u.up).map(_.get).getOrElse(this.get)
