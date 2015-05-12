@@ -188,6 +188,8 @@ case class ActiveFactory[
                 "Should be able to sym the theorem ")).getOrBug(
               "Should resolve to a unit theorem")
           active.units.insert(lit,unit).insert(symLit,symThm)
+        case Some(unit@ithmF.kernel.UnitThm(lit,_)) =>
+          active.units.insert(lit,unit)
         case _ => active.units;
       };
       newSubsumer = active.subsume.insert(ithm.clause,ithm.id);
