@@ -15,8 +15,7 @@ lazy val metis = crossProject.in(file(".")).
     scalaVersion := "2.11.6"
   ).
   jvmSettings(
-    libraryDependencies += "org.scalaz" %% "scalaz-core" % "latest.integration",
-    libraryDependencies += "org.scalatest" %% "scalatest" % "latest.integration"
+    libraryDependencies += "org.scalaz" %% "scalaz-core" % "7.1.3"
   ).
   jsSettings(
     libraryDependencies += "com.github.japgolly.fork.scalaz" %%% "scalaz-core" % "7.1.3"
