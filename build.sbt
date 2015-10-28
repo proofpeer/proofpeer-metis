@@ -12,7 +12,7 @@ lazy val metis = crossProject.in(file(".")).
     name := "metis",
     organization := "net.proofpeer",
     version := "0.2-SNAPSHOT",
-    scalaVersion := "2.11.6"
+    scalaVersion := "2.11.7"
   ).
   jvmSettings(
     libraryDependencies += "org.scalaz" %% "scalaz-core" % "7.1.3"
