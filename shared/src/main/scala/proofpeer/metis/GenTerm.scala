@@ -50,7 +50,7 @@ object Subst {
   * @tparam type of subterms
   */
 trait GenTerm[V,T,GT] { this: GT =>
-  def frees: Set[V]
+  def frees(implicit ev: Order[V]): ISet[V]
   def freeIn(v: V): Boolean
   def subst(θ: Subst[V,T])(implicit ev: Order[V]): GT
 

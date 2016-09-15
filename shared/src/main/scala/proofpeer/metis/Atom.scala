@@ -23,8 +23,7 @@ object Atom {
     override def replaceWith(replacement: Term[V,F]) =
       PredCursor(p,largs,cursor.replaceWith(replacement),rargs)
 
-    override def subst(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]):
-        TermCursor[V,F,P] =
+    override def subst(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]): TermCursor[V,F,P] =
       PredCursor(p,largs.map(_.subst(θ)), cursor.subst(θ), rargs.map(_.subst(θ)))
 
     override def down  = cursor.down.map(PredCursor(p,largs,_,rargs))
@@ -103,10 +102,8 @@ abstract sealed class Atom[V,F,P]
     with MatchableTerm[V,Term[V,F],Atom[V,F,P]]
     with Cursored[V,Term[V,F],Atom[V,F,P],Atom.TermCursor[V,F,P]] {
 
-  override def frees = this match {
-    case Pred(_,args) => args.foldLeft(Set[V]()){
-      case (fvs,arg) => fvs union arg.frees
-    }
+  override def frees(implicit ev: Order[V]) = this match {
+    case Pred(_,args) => args.foldMap { _.frees }
     case Eql(l,r) => l.frees union r.frees
   }
 
@@ -115,8 +112,7 @@ abstract sealed class Atom[V,F,P]
     case Eql(l,r)     => l.freeIn(v) || r.freeIn(v)
   }
 
-  override def patMatch(θ: Subst[V,Term[V,F]], atm: Atom[V,F,P])(
-    implicit ev: Order[V]):
+  override def patMatch(θ: Subst[V,Term[V,F]], atm: Atom[V,F,P])(implicit ev: Order[V]):
       List[Subst[V,Term[V,F]]] =
     (this,atm) match {
       case (Pred(p1,args1), Pred(p2,args2))
@@ -170,7 +166,8 @@ abstract sealed class Atom[V,F,P]
 }
 
 /** Predications P(...args...) */
-case class Pred[V,F,P](functor: P, args: List[Term[V,F]]) extends Atom[V,F,P] {
+case class Pred[V,F,P](functor: P, args: List[Term[V,F]])
+    extends Atom[V,F,P] {
   override def subst(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]): Pred[V,F,P] =
     Pred(functor,args.map(_.subst(θ)))
 }

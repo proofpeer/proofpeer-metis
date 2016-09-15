@@ -41,7 +41,7 @@ case class Literal[V,F,P](isPositive: Boolean, atom: Atom[V,F,P])
     with Cursored[V,Term[V,F],Literal[V,F,P],Literal.TermCursor[V,F,P]] {
   def negate() = Literal(!this.isPositive, this.atom)
 
-  override def frees = atom.frees
+  override def frees(implicit ev: Order[V]) = atom.frees
   override def freeIn(v: V) = atom.freeIn(v)
   override def subst(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]) =
     Literal(isPositive,atom.subst(θ))
@@ -66,7 +66,8 @@ case class Literal[V,F,P](isPositive: Boolean, atom: Atom[V,F,P])
 
 trait LiteralOrdering[V,F,P] {
   /** isLargerLiteral(lits)(lit) returns true iff lit is maximal in {lit} ∪ lits. */
-  def isMaximal(lits: Set[Literal[V,F,P]]): Literal[V,F,P] => Boolean
+  def isMaximal(implicit ordV: Order[V], ordF: Order[F], ordP: Order[P]):
+      ISet[Literal[V,F,P]] => Literal[V,F,P] => Boolean
 }
 
 class MetisLiteralOrdering[V:Order,F](termOrd: PartialOrder[Term[V,F]])
@@ -88,13 +89,14 @@ class MetisLiteralOrdering[V:Order,F](termOrd: PartialOrder[Term[V,F]])
     }
   }
 
-  override def isMaximal(lits: Set[Literal[V,F,F]]): Literal[V,F,F] => Boolean = {
+  override def isMaximal(implicit ordV: Order[V], ordF: Order[F], ordP: Order[F]):
+      ISet[Literal[V,F,F]] => Literal[V,F,F] => Boolean = lits => {
     if (lits.isEmpty)
       _ => true
     else {
-      val allPositive = lits.forall(_.isPositive)
+      val allPositive = lits.all(_.isPositive)
       val tms = lits.filter { _.isPositive == allPositive }
-        .flatMap { lit => atomToTerms(lit.atom) }.toList
+        .foldMap { lit => atomToTerms(lit.atom) }.toList
       lit => lit match {
         case Literal(isPositive,atom) =>
           if (isPositive == allPositive)

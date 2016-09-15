@@ -101,13 +101,11 @@ abstract sealed class Term[V,F]
     }
   }
 
-  override def frees: Set[V] = {
+  override def frees(implicit ev: Order[V]): ISet[V] = {
     this match {
       case Fun(_,args) =>
-        args.foldLeft(Set[V]()) {
-          case (fvs,arg) => fvs union arg.frees
-        }
-      case Var(v)      => Set(v)
+        args.foldMap { _.frees }
+      case Var(v)      => ISet.singleton(v)
     }
   }
 
