@@ -14,3 +14,4 @@
 (add-hook 'scala-mode-hook 'whitespace-mode)
 (add-hook 'scala-mode-hook 'subword-mode)
 (global-set-key (kbd "C-c l") 'org-store-link)
+(require 'helm-config)
