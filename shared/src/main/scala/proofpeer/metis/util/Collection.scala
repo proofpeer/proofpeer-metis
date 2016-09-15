@@ -6,15 +6,22 @@ import scala.language.higherKinds
 import scalaz._
 import Scalaz._
 
-class RichFoldable[F[_]:Foldable,A:Order](xs: F[A])(implicit ev:ApplicativePlus[F]) {
-  def distinctBy(p: (A,A) => Boolean) = {
-    xs.foldLeft((ev.monoid[A].zero,∅[ISet[A]])) {
+object ISetExtra {
+  def distinctBy[A:Order](xs: ISet[A])(p: (A,A) => Boolean): ISet[A] = {
+    xs.foldLeft((∅[ISet[A]],∅[ISet[A]])) {
       case ((acc,dups),x) =>
         if (dups.any(y => p(x,y)))
           (acc,dups)
-        else (ev.monoid.append(acc,ev.point(x)), dups union ISet.singleton(x))
-    }
+        else (acc.insert(x), dups.insert(x))
+    }._1
   }
+}
+
+class RichFoldable[F[_]:Foldable,A](xs: F[A]) {
+  def getSingleton = xs.foldLeft((none[A],true)) {
+    case ((_,true),x) => (Some(x),false)
+    case ((_,false),x) => (None,false)
+  }._1
 }
 
 class RichOption[A](x: Option[A]) {
@@ -27,10 +34,7 @@ class RichOption[A](x: Option[A]) {
 
 import scala.language.implicitConversions
 object RichCollectionInstances {
-  implicit def toRichFoldable[F[_]:Foldable,A:Order](xs: F[A])(
-    implicit ev:ApplicativePlus[F]) {
-    new RichFoldable(xs)
-  }
   implicit def toRichOption[A](x: Option[A]) = new RichOption(x)
-  // TODO: Add listToRichTraversable and replace uses of headOption to take a singleton element with singleton. Either that, or figure out why you decided to have patMatch and unify return lists rather than options.
+  implicit def toRichFoldable[F[_]:Foldable,A](xs: F[A]) =
+    new RichFoldable(xs)
 }
