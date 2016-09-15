@@ -18,10 +18,12 @@ object ISetExtra {
 }
 
 class RichFoldable[F[_]:Foldable,A](xs: F[A]) {
-  def getSingleton = xs.foldLeft((none[A],true)) {
-    case ((_,true),x) => (Some(x),false)
-    case ((_,false),x) => (None,false)
+  def getSingleton = xs.foldRight((none[A],true)) {
+    case (x,(_,true)) => (Some(x),false)
+    case (x,(_,false)) => (None,false)
   }._1
+  def findFirst[B](f : A => Option[B]) =
+    Tags.First.unwrap(xs.foldMap(x => Tags.First(f(x))))
 }
 
 class RichOption[A](x: Option[A]) {
