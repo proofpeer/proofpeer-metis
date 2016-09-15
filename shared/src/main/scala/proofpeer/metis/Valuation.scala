@@ -24,14 +24,14 @@ case class Valuations[A](fin: FinOrd) {
   }
 
   /** The constant valuation to 0 */
-  def zero(xs: Set[A]) = {
+  def zero(xs: ISet[A]) = {
     Valuation(xs.foldLeft(Map[A,fin.Fin]()) {
       case (m,x) => m + (x → fin.zero)
     })
   }
 
   /** The random valuation */
-  def random(xs: Set[A]) = {
+  def random(xs: ISet[A]) = {
     val rv = xs.foldRightM[MetisRNG.M,Map[A,fin.Fin]](Map[A,fin.Fin]()) {
       case (x,m) => for (n <- fin.random) yield m + (x → n)
     }
@@ -41,7 +41,7 @@ case class Valuations[A](fin: FinOrd) {
   /** Fold across all valuations. */
   // TODO: Check why vf.foldValuations(Set(1,2,3,4,5,6,7),()) { case (_,_) => () }
   // blows the heap
-  def foldValuations[B](xs: Set[A], b: B)(f: (B,Valuation) => B) = {
+  def foldValuations[B](xs: ISet[A], b: B)(f: (B,Valuation) => B) = {
     val vs = unfold(zero(xs)) { v => v.suc.map { v_ => (v_,v_) } }
     vs.foldLeft(b)(f)
   }

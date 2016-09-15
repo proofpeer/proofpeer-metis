@@ -6,11 +6,12 @@ import scala.language.implicitConversions
 import scalaz._
 import Scalaz._
 import TermInstances._
+import LiteralInstances._
 import util._
 import RichCollectionInstances._
 
 object Clause {
-  case class TermCursor[V,F,P](
+  case class TermCursor[V:Order,F:Order,P:Order](
     largs:  List[Literal[V,F,P]],
     cursor: Literal.TermCursor[V,F,P],
     rargs:  List[Literal[V,F,P]])
@@ -20,7 +21,8 @@ object Clause {
     override def get = cursor.get
     override def replaceWith(replacement: Term[V,F]) =
       TermCursor(largs,cursor.replaceWith(replacement),rargs)
-    override def subst(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]) =
+    override def subst(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]) = substImpl(θ)
+    def substImpl(θ: Subst[V,Term[V,F]]) =
       TermCursor(largs.map(_.subst(θ)),cursor.subst(θ),rargs.map(_.subst(θ)))
     override def down  = cursor.down.map(TermCursor(largs,_,rargs))
     override def up    = cursor.up.map(TermCursor(largs,_,rargs))
@@ -46,7 +48,7 @@ object Clause {
           }
         }
     }
-    override def top   = Clause((cursor.top :: largs.reverse ++ rargs).toSet)
+    override def top   = Clause(ISet.fromList(cursor.top :: largs.reverse ++ rargs))
     def literal        = cursor.top
     def literalCursor  = cursor
   }
@@ -59,17 +61,18 @@ object Clause {
   * @tparam F The alphabet from which functor names are drawn
   * @tparam P The alphabet from which predicate names are drawn
   */
-case class Clause[V,F,P](lits: Set[Literal[V,F,P]])
+case class Clause[V:Order,F:Order,P:Order](lits: ISet[Literal[V,F,P]])
     extends GenTerm[V,Term[V,F],Clause[V,F,P]]
     with Cursored[V,Term[V,F],Clause[V,F,P],Clause.TermCursor[V,F,P]]{
 
   import LiteralInstances._
   import AtomInstances._
 
-  override def frees = lits.flatMap(_.frees)
-  override def freeIn(v: V) = lits.exists(_.freeIn(v))
-  override def subst(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]) =
-    new Clause(lits.map(_.subst(θ)))
+  override def frees(implicit ev: Order[V]) = freesImpl
+  def freesImpl = lits.foldMap(_.frees)
+  override def freeIn(v: V) = lits.any(_.freeIn(v))
+  override def subst(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]) = substImpl(θ)
+  def substImpl(θ: Subst[V,Term[V,F]]) = new Clause(lits.map(_.subst(θ)))
   override def heuristicSize = lits.toList.map(_.heuristicSize).sum
 
   override def topLeft =
@@ -81,8 +84,7 @@ case class Clause[V,F,P](lits: Set[Literal[V,F,P]])
         }
     }
 
-  implicit def atomOrder(implicit ordV: Order[V], ordF: Order[F], ordP: Order[P]) =
-    Order[Atom[V,F,P]].toScalaOrdering
+  implicit def atomOrder = Order[Atom[V,F,P]].toScalaOrdering
 
   def isTautology: Boolean = {
     lits.foldLeft(Set[Atom[V,F,P]]()) {
@@ -103,25 +105,29 @@ case class Clause[V,F,P](lits: Set[Literal[V,F,P]])
   def isContradiction = lits.isEmpty
 
   def largestLiterals(litOrder: LiteralOrdering[V,F,P]) =
-    lits.filter(litOrder.isMaximal(this.lits)(_))
+    lits.filter(litOrder.isMaximal(
+      implicitly[Order[V]],
+      implicitly[Order[F]],
+      implicitly[Order[P]])(this.lits)(_))
 
   def largestSubterms(litOrder: LiteralOrdering[V,F,P]) = {
     for (
       (llits,lit,rlits) <- util.Fun.splits(lits.toList);
-      if litOrder.isMaximal(this.lits)(lit);
+      if litOrder.isMaximal(
+        implicitly[Order[V]],
+        implicitly[Order[F]],
+        implicitly[Order[P]])(this.lits)(lit);
       cursor  <- lit.allSubterms)
     yield Clause.TermCursor(llits,cursor,rlits)
   }
 }
 
 object ClauseInstances {
-  implicit def toRichIterable[V,F,P](cl: Clause[V,F,P]) =
-    new RichIterable(cl.lits)
   implicit def toSet[V,F,P](cl: Clause[V,F,P]) = cl.lits
   import LiteralInstances._
   implicit def ClauseIsShow[V:Show,F:Show,P:Show] = new Show[Clause[V,F,P]] {
     override def show(clause: Clause[V,F,P]) =
-      Cord("Clause(") ++ Cord.mkCord(",",clause.lits.toSeq.map(_.show):_*) ++ ")"
+      Cord("Clause(") ++ Cord.mkCord(",",clause.lits.toList.map(_.show):_*) ++ ")"
     }
 }
 

@@ -103,10 +103,8 @@ abstract sealed class Atom[V,F,P]
     with MatchableTerm[V,Term[V,F],Atom[V,F,P]]
     with Cursored[V,Term[V,F],Atom[V,F,P],Atom.TermCursor[V,F,P]] {
 
-  override def frees = this match {
-    case Pred(_,args) => args.foldLeft(Set[V]()){
-      case (fvs,arg) => fvs union arg.frees
-    }
+  override def frees(implicit ev: Order[V]) = this match {
+    case Pred(_,args) => args.foldMap { _.frees }
     case Eql(l,r) => l.frees union r.frees
   }
 
@@ -117,7 +115,7 @@ abstract sealed class Atom[V,F,P]
 
   override def patMatch(θ: Subst[V,Term[V,F]], atm: Atom[V,F,P])(
     implicit ev: Order[V]):
-      List[Subst[V,Term[V,F]]] =
+      Option[Subst[V,Term[V,F]]] =
     (this,atm) match {
       case (Pred(p1,args1), Pred(p2,args2))
           if p1 == p2 && args1.length == args2.length =>
@@ -129,11 +127,11 @@ abstract sealed class Atom[V,F,P]
           θ <- l1.patMatch(θ,l2);
           θ <- r1.patMatch(θ,r2))
         yield θ
-      case _ => List()
+      case _ => None
     }
 
   override def unify(θ: Subst[V,Term[V,F]], atm: Atom[V,F,P])(implicit ev: Order[V]):
-      List[Subst[V,Term[V,F]]] =
+      Option[Subst[V,Term[V,F]]] =
     (this,atm) match {
       case (Pred(p1,args1), Pred(p2,args2))
           if p1 == p2 && args1.length == args2.length =>
@@ -145,7 +143,7 @@ abstract sealed class Atom[V,F,P]
           θ <- l1.unify(θ,l2);
           θ <- r1.unify(θ,r2))
         yield θ
-      case _ => List()
+      case _ => None
     }
 
   override def heuristicSize = 1 + (this match {
@@ -170,7 +168,8 @@ abstract sealed class Atom[V,F,P]
 }
 
 /** Predications P(...args...) */
-case class Pred[V,F,P](functor: P, args: List[Term[V,F]]) extends Atom[V,F,P] {
+case class Pred[V,F,P](functor: P, args: List[Term[V,F]])
+    extends Atom[V,F,P] {
   override def subst(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]): Pred[V,F,P] =
     Pred(functor,args.map(_.subst(θ)))
 }

@@ -64,21 +64,14 @@ object Fun {
     loopM[Id,A](x)(f)
   }
 
-  def existsM[X,M[_]:Monad](xs: Iterator[X])(p: X => M[Boolean]): M[Boolean] = {
-    var it = xs
-
-    def loop: M[Boolean] = {
-      if (it.isEmpty)
-        false.point[M]
-      else {
-        val x = it.next
-        p(x) >>= {
-          case true   => true.point[M]
-          case false  => loop
-        }
+  def existsM[X,F[_]:Foldable,M[_]:Monad](xs: F[X])(p: X => M[Boolean]):
+      M[Boolean] = {
+    // NOTE: Doesn't short-circuit
+    xs.foldRight(false.point[M]) {
+      case (x,b) => b >>= {
+        case true => true.point[M]
+        case false => p(x)
       }
     }
-
-    loop
   }
 }

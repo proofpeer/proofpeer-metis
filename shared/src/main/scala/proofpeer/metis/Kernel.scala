@@ -3,6 +3,7 @@ package proofpeer.metis
 import ClauseInstances._
 import LiteralInstances._
 import proofpeer.metis.util.Fun._
+import proofpeer.metis.util._
 import scala.language.higherKinds
 import scala.language.implicitConversions
 import scalaz._
@@ -80,7 +81,7 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
       *            C
       */
     def removeSym: Thm = {
-      val newCl = clause.distinctBy {
+      val newCl = ISetExtra.distinctBy(clause) {
           case (Literal(p1,Eql(x1,y1)),Literal(p2,Eql(x2,y2))) =>
             x1 == y2 && x2 == y1 && p1 == p2
           case _ => false
@@ -106,13 +107,15 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
     *  ------------------- assume p
     *        p ∨ ¬p
     */
-  def assume(lit: Literal[V,F,P]) = Thm(Clause(Set(lit,lit.negate)), Assume())
+  def assume(lit: Literal[V,F,P]) =
+    Thm(Clause(ISet.fromList(List(lit,lit.negate))), Assume())
 
   /**
     *  ------------------- refl x
     *         x = x
     */
-  def refl(tm: Term[V,F]) = Thm(Clause(Set(Literal(true,Eql(tm,tm)))),Refl())
+  def refl(tm: Term[V,F]) =
+    Thm(Clause(ISet.singleton(Literal(true,Eql(tm,tm)))),Refl())
 
   /**  L ∨ C      M ∨ D
     *  ---------------- resolve L, where M is the negation of L.
@@ -121,7 +124,7 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
   def resolve(lit: Literal[V,F,P], thm1: Thm, thm2: Thm): Option[Thm] = {
     val negLit = lit.negate
     if (thm1.clause.contains(lit) && thm2.clause.contains(negLit)) {
-      val cl = (thm1.clause - lit) ++ (thm2.clause - negLit)
+      val cl = (thm1.clause delete lit) |+| (thm2.clause delete negLit)
       Some(Thm(Clause(cl),
         if (lit.isPositive) Resolve(lit.atom,thm1,thm2)
         else Resolve(negLit.atom,thm2,thm1)))
@@ -141,7 +144,9 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
     val tmC_   = tmC.replaceWith(t)
     val neq    = Literal(false,Eql[V,F,P](s,t))
     val newLit = tmC_.top
-    (oldLit,tmC_,Thm(Clause(Set(neq, oldLit.negate, newLit)),Equality(tmC,t)))
+    val newThm =
+      Thm(Clause(ISet.fromList(List(neq, oldLit.negate, newLit))),Equality(tmC,t))
+    (oldLit,tmC_,newThm)
   }
 
   // Derived rules
@@ -153,12 +158,12 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
     */
   def sym(x: Term[V,F], y: Term[V,F]) = {
     val xx = refl(x);
-    val xxLit = (xx.clause.headOption >>= {
-      lit => lit.topLeft.headOption
+    val xxLhs = (xx.clause.lits.getSingleton >>= {
+      lit => lit.topLeft
     }).getOrBug(
       "Refl should produce an equality")
-    val (_,_,yx) = equality(xxLit,y)
-    resolve(xxLit.top,xx,yx).getOrBug("Sym")
+    val (_,_,yx) = equality(xxLhs,y)
+    resolve(xxLhs.top,xx,yx).getOrBug("Sym")
   }
 
   type ST[A] = State[Thm,A]
@@ -264,6 +269,6 @@ sealed class Kernel[V:Order,F:Order,P:Order] {
   /** Destruct a clause of exactly one literal. */
   object UnitThm {
     def getUnit(thm: Thm): Option[UnitThm] =
-      thm.clause.lits.singleton.map { UnitThm(_,thm) }
+      thm.clause.lits.getSingleton.map { UnitThm(_,thm) }
   }
 }

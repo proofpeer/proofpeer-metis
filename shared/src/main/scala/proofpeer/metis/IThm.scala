@@ -7,6 +7,9 @@ import scala.language.implicitConversions
 import scalaz._
 import Scalaz._
 
+import TermInstances._
+import LiteralInstances._
+
 /** Factory for theorems with identifiers, preserved by normalising rules.
   *
   * @tparam V  The alphabet from which variable names are drawn
@@ -45,9 +48,9 @@ case class IThmFactory[
      */
     private def expandAbbrevs(thm: kernel.Thm) = {
       val firstSubst =
-        thm.clause.toIterator.map {
+        thm.clause.toList.map {
           case NeqLit(l,r) if l != r =>
-            l.unify(Subst.empty,r).headOption
+            l.unify(Subst.empty,r)
           case _                     => None
         }.find (_.isDefined).flatten
       firstSubst.map(thm.subst(_)).getOrElse(thm).removeIrrefl
@@ -102,7 +105,7 @@ case class IThmFactory[
 
     /** Replace all variables in a theorem with fresh variables. */
     def freshen = {
-      val fvs = this.clause.flatMap(_.frees)
+      val fvs = this.clause.lits.foldMap(_.frees)
       val θ   = fvs.foldLeft(Subst.empty[V,Term[V,F]]) {
         case (θ,v) =>
           val (newState,freshVar) = nextV(theState,v)
@@ -153,6 +156,11 @@ case class IThmFactory[
     */
   def axiom(cl: Clause[V,F,P]) = new IThm(newId, kernel.axiom(cl))
 
+  private def isMaximal = litOrder.isMaximal(
+    implicitly[Order[V]],
+    implicitly[Order[F]],
+    implicitly[Order[P]])
+
   /**  L ∨ C      M ∨ D
     *  ------------------ resolve L M, where L unifies with the negation of M
     *       C ∨ D
@@ -174,8 +182,8 @@ case class IThmFactory[
       nlit2_ = lit1.negate;
       thm1_  = thm1.subst(θ);
       thm2_  = thm2.subst(θ);
-      if litOrder.isMaximal(thm1_.clause)(lit1_);
-      if litOrder.isMaximal(thm2_.clause)(nlit2_);
+      if isMaximal(thm1_.clause)(lit1_);
+      if isMaximal(thm2_.clause)(nlit2_);
       resolvent <- kernel.resolve(lit1_,thm1_,thm2_))
     yield new IThm(newId, resolvent)
   }
@@ -219,10 +227,10 @@ case class IThmFactory[
   }
 
   object RewriteCursor {
-    def rewrites(ithm: IThm): Set[RewriteCursor] =
+    def rewrites(ithm: IThm): List[RewriteCursor] =
       for (
-        (lit@Literal(true,eql@Eql(x,y))) <- ithm.clause.lits;
-        if litOrder.isMaximal(ithm.clause.lits)(lit);
+        (lit@Literal(true,eql@Eql(x,y))) <- ithm.clause.lits.toList;
+        if isMaximal(ithm.clause.lits)(lit);
         ort <-
         (if (termOrd.tryCompare(x,y) === Some(Ordering.GT))
           List(LeftToRight()) else List()) ++
@@ -242,13 +250,13 @@ case class IThmFactory[
       lhs_  = lhs.subst(θ);
       rewr_ = rewrite.subst(θ);
       lit_  = subterm.subst(θ);
-      if litOrder.isMaximal(rewr_.top.clause.lits)(rewr_.literal);
-      if litOrder.isMaximal(subterm.top.clause.lits)(subterm.literal);
+      if isMaximal(rewr_.top.clause.lits)(rewr_.literal);
+      if isMaximal(subterm.top.clause.lits)(subterm.literal);
       Ordering.GT <- termOrd.tryCompare(rewr_.lhs,rewr_.rhs);
       (_,_,equal) = kernel.equality(lit_.clauseCursor.literalCursor, rewr_.rhs);
-      val resolvent = (for (
+      resolvent = (for (
         resolvent1 <- kernel.resolve(rewr_.literalRewrite,rewr_.topRewrite,equal);
-        resolvent2 <- if (resolvent1.clause(lit_.literal.negate))
+        resolvent2 <- if (resolvent1.clause.member(lit_.literal.negate))
                         kernel.resolve(lit_.literal,lit_.top,resolvent1)
                       else Some(resolvent1))
       yield resolvent2).getOrBug("paramodulate"))

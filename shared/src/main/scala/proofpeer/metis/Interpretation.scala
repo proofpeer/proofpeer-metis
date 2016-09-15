@@ -14,7 +14,7 @@ import util.Fun._
   * @param  maxImages The maximum number of concrete tuples for which to generate
   *         interpretations for each predicate/function
 */
-case class Interpretation[V,F,P](
+case class Interpretation[V:Order,F,P](
   maxImages: Int,
   valsF: Valuations[V]) {
   def safeExp(x:Int,n:Int) =
@@ -172,7 +172,7 @@ case class Interpretation[V,F,P](
   }
 
   def interpretClause(vl: valsF.Valuation, cl: Clause[V,F,P]) = {
-    existsM(cl.lits.iterator)(interpretLiteral(vl,_))
+    existsM(cl.lits)(interpretLiteral(vl,_))
   }
 
   def checkClause(maxChecks: Option[Int], cl: Clause[V,F,P]) = {

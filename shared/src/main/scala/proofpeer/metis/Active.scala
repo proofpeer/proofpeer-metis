@@ -84,7 +84,7 @@ case class ActiveFactory[
 
     def deduceResolutions(ithm: ithmF.IThm) =
       for (
-        lit          <- ithm.clause.largestLiterals(litOrder);
+        lit          <- ithm.clause.largestLiterals(litOrder).toList;
         (lit2,ithm2) <- literals.unifies(lit.negate);
         resolvent    <- ithmF.resolve(lit, ithm, lit2, ithm2))
       yield resolvent

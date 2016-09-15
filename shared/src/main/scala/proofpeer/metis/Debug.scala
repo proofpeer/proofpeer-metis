@@ -74,5 +74,5 @@ object Debug {
     }
 
   def TPTPOfClause[V:Show,F:Show,P:Show](clause: Clause[V,F,P]) =
-    Cord.mkCord(" | ",clause.lits.toSeq.map(TPTPOfLiteral(_)):_*)
+    Cord.mkCord(" | ",clause.lits.toList.map(TPTPOfLiteral(_)):_*)
 }

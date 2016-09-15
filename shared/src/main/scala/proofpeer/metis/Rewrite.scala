@@ -1,13 +1,15 @@
 package proofpeer.metis
 
-import proofpeer.metis.util.RichCollectionInstances._
 import scala.language.implicitConversions
 import scala.collection.immutable._
 import scalaz._
 import Scalaz._
 
+import LiteralInstances._
+import util.RichCollectionInstances._
+
 /** KBO-based rewriting system as implemented in METIS. */
-case class METISRewriting[V:Order,F:Order,P,K<:Kernel[V,F,P]](kernel: K)(
+case class METISRewriting[V:Order,F:Order,P:Order,K<:Kernel[V,F,P]](kernel: K)(
   implicit ordFun: Order[Fun[V,F]]) {
 
   import ClauseInstances._
@@ -22,7 +24,7 @@ case class METISRewriting[V:Order,F:Order,P,K<:Kernel[V,F,P]](kernel: K)(
   object Equation {
     def ofThm(eql: kernel.Thm): Option[Equation] =
       for (
-        Literal(true,Eql(l,r)) <- eql.clause.lits.singleton;
+        Literal(true,Eql(l,r)) <- eql.clause.lits.getSingleton;
         ort <- kbo.tryCompare(l,r) match {
           case Some(Ordering.LT) => Some(Directed(RightToLeft()))
           case Some(Ordering.GT) => Some(Directed(LeftToRight()))
@@ -45,7 +47,7 @@ case class METISRewriting[V:Order,F:Order,P,K<:Kernel[V,F,P]](kernel: K)(
     }
     def symEql = {
       (for (
-        lit <- eqn.eql.clause.lits.singleton;
+        lit <- eqn.eql.clause.lits.getSingleton;
         thm <- kernel.resolve(lit,eqn.eql,kernel.sym(eqn.l,eqn.r)))
       yield thm).getOrBug("Should always be able to flip an equation.")
     }
@@ -114,14 +116,14 @@ case class METISRewriting[V:Order,F:Order,P,K<:Kernel[V,F,P]](kernel: K)(
     known:    Map[Int,Equation],
     redexes:  Nets.TermNet[F,(Int,Rewrite)],
     subterms: Nets.TermNet[F,(Int,Cursor)],
-    waiting:  Set[Int]) {
+    waiting:  ISet[Int]) {
 
     def this() =
       this(
         Map[Int,Equation](),
         new Nets.TermNet[F,(Int,Rewrite)],
         new Nets.TermNet[F,(Int,Cursor)],
-        Set[Int]())
+        ∅[ISet[Int]])
 
     def isKnown(id: Int) = known.contains(id)
 
@@ -136,7 +138,7 @@ case class METISRewriting[V:Order,F:Order,P,K<:Kernel[V,F,P]](kernel: K)(
         val redexes_ = rewrs.foldLeft(redexes) {
           case (r,rewr) => r.insert(rewr.redex,(id,rewr))
         }
-        val waiting_ = waiting + id
+        val waiting_ = waiting.insert(id)
         new Rewriter(known_,redexes_,subterms,waiting_)
       }
     }
@@ -162,27 +164,27 @@ case class METISRewriting[V:Order,F:Order,P,K<:Kernel[V,F,P]](kernel: K)(
         case Ordering.GT =>
           Some { term:Term[V,F] =>
             if (term == l)
-              Some(r,kernel.assume(Literal(true,Eql(l,r))))
+              Some((r,kernel.assume(Literal(true,Eql(l,r)))))
             else
               None
           }
         case Ordering.LT =>
           Some { term:Term[V,F] =>
             if (term == r)
-              Some(l,kernel.sym(l,r))
+              Some((l,kernel.sym(l,r)))
             else None
           }
         case Ordering.EQ => None
       }
     }
 
-    def mkNeqConvMap(lits: Set[Literal[V,F,P]]) = {
-      lits.foldLeft((Map[Literal[V,F,P],Conv](),Set[Literal[V,F,P]]())) {
+    def mkNeqConvMap(lits: ISet[Literal[V,F,P]]) = {
+      lits.foldLeft((Map[Literal[V,F,P],Conv](),∅[ISet[Literal[V,F,P]]])) {
         case ((mapAcc,litsAcc),lit@NeqLit(l,r)) => mkNeqConv(l,r) match {
           case Some(conv) => (mapAcc + (lit → conv), litsAcc)
-          case None       => (mapAcc, litsAcc + lit)
+          case None       => (mapAcc, litsAcc.insert(lit))
         }
-        case ((mapAcc,litsAcc),lit) => (mapAcc, litsAcc + lit)
+        case ((mapAcc,litsAcc),lit) => (mapAcc, litsAcc.insert(lit))
       }
     }
 
@@ -216,7 +218,7 @@ case class METISRewriting[V:Order,F:Order,P,K<:Kernel[V,F,P]](kernel: K)(
       val (map,lits) = mkNeqConvMap(thm.clause)
 
       def interRewrite1(
-        acc: (NeqConvMap, Set[Literal[V,F,P]], kernel.Thm, Boolean),
+        acc: (NeqConvMap, ISet[Literal[V,F,P]], kernel.Thm, Boolean),
         key: Literal[V,F,P]) = {
         val (map, lits, thm, changed) = acc
         val newMap = map - key
@@ -232,9 +234,9 @@ case class METISRewriting[V:Order,F:Order,P,K<:Kernel[V,F,P]](kernel: K)(
                 mkNeqConv(l,r) match {
                   case Some(conv) =>
                     (newMap + (newLit → conv), lits, newThm, true)
-                  case None => (newMap, lits + key, newThm, changed)
+                  case None => (newMap, lits.insert(key), newThm, changed)
                 }
-              case _ => (newMap, lits + key, thm, changed)
+              case _ => (newMap, lits.insert(key), thm, changed)
             }
 
         newAcc.getOrElse(acc)
@@ -242,9 +244,9 @@ case class METISRewriting[V:Order,F:Order,P,K<:Kernel[V,F,P]](kernel: K)(
 
       def interRewrite(
         map: NeqConvMap,
-        lits: Set[Literal[V,F,P]],
+        lits: ISet[Literal[V,F,P]],
         thm: kernel.Thm):
-          (NeqConvMap, Set[Literal[V,F,P]], kernel.Thm) = {
+          (NeqConvMap, ISet[Literal[V,F,P]], kernel.Thm) = {
         val (newMap, newLits, newThm, changed) =
           map.keys.foldLeft((map, lits, thm, false))(interRewrite1)
         if (changed)
@@ -295,15 +297,15 @@ case class METISRewriting[V:Order,F:Order,P,K<:Kernel[V,F,P]](kernel: K)(
         case _               => true
       }
 
-    def pick(todo: Set[(Int)]): Option[(Int,Equation)] =
-      todo.collectFirst(Function.unlift { id =>
+    def pick(todo: ISet[(Int)]): Option[(Int,Equation)] =
+      todo.findFirst { id =>
         known.get(id) match {
           case Some(eqn) if isOriented(eqn) => Some((id,eqn))
           case _                            => None
-      }}).orElse(
-        todo.collectFirst(Function.unlift { id =>
+      }}.orElse(
+        todo.findFirst { id =>
           known.get(id).map { eqn => (id,eqn) }
-        }))
+        })
 
     def reduce1(isNew: Boolean, thmId: Int, eqn: Equation, acc: ReduceAcc):
         (Rewriter,ReduceAcc) = {
@@ -325,16 +327,16 @@ case class METISRewriting[V:Order,F:Order,P,K<:Kernel[V,F,P]](kernel: K)(
       val redexesAcc =
         if (sameRedexes)
           acc.redexesAcc
-        else acc.redexesAcc + thmId
+        else acc.redexesAcc.insert(thmId)
       val subtermsAcc =
         if (isNew || isIdentical)
           acc.subtermsAcc
         else
-          acc.subtermsAcc + thmId
+          acc.subtermsAcc.insert(thmId)
       val changedAcc =
         if (!isNew && isIdentical)
           acc.changedAcc
-        else acc.changedAcc + thmId
+        else acc.changedAcc.insert(thmId)
       val newEquation =
         if (sameRedexes)
           Some(Equation(l,r,eqn.orientation,newEql))
@@ -399,7 +401,7 @@ case class METISRewriting[V:Order,F:Order,P,K<:Kernel[V,F,P]](kernel: K)(
       new Rewriter(known,newRedexes_,newSubterms_,waiting)
     }
 
-    def findReducibles(todo: Set[Int], thmId: Int, eqn: Equation) = {
+    def findReducibles(todo: ISet[Int], thmId: Int, eqn: Equation) = {
       val rewrs = Rewrite.ofEquation(eqn)
       rewrs.foldLeft(todo) {
         case (todo,rewr) =>
@@ -421,7 +423,7 @@ case class METISRewriting[V:Order,F:Order,P,K<:Kernel[V,F,P]](kernel: K)(
                 Ordering.GT <- kbo.tryCompare(rewr.redex,rewr.redux.subst(θ)))
               yield thmId_
 
-              todo ++ rewritable
+              todo union rewritable.foldMap(ISet.singleton(_))
 
             case _ => todo
           }
@@ -447,16 +449,17 @@ case class METISRewriting[V:Order,F:Order,P,K<:Kernel[V,F,P]](kernel: K)(
       }
     }
 
-    def reduceAcc(acc: ReduceAcc): (Rewriter, Set[Int]) = {
+    def reduceAcc(acc: ReduceAcc): (Rewriter, ISet[Int]) = {
       pick(acc.todoAcc) match {
         case Some((id,eqn)) =>
           val (newRw, newAcc) = reduce1(false, id, eqn, ReduceAcc(
-            acc.redexesAcc, acc.subtermsAcc, acc.todoAcc - id, acc.changedAcc))
+            acc.redexesAcc, acc.subtermsAcc, acc.todoAcc.delete(id), acc.changedAcc))
           newRw.reduceAcc(newAcc)
         case None =>
           pick(this.waiting) match {
             case Some((id,eqn)) =>
-              val newRw = new Rewriter(known, redexes, subterms, this.waiting - id)
+              val newRw =
+                new Rewriter(known, redexes, subterms, this.waiting.delete(id))
               val (newRw2, newAcc) =
                 newRw.reduce1(true, id, eqn, acc)
               newRw2.reduceAcc(newAcc)
@@ -465,12 +468,13 @@ case class METISRewriting[V:Order,F:Order,P,K<:Kernel[V,F,P]](kernel: K)(
       }
     }
 
-    def reduce = reduceAcc(ReduceAcc(Set(),Set(),Set(),Set()))
+    val noInts = ∅[ISet[Int]]
+    def reduce = reduceAcc(ReduceAcc(noInts,noInts,noInts,noInts))
   }
 
   case class ReduceAcc(
-    redexesAcc:  Set[Int],
-    subtermsAcc: Set[Int],
-    todoAcc:     Set[Int],
-    changedAcc:  Set[Int])
+    redexesAcc:  ISet[Int],
+    subtermsAcc: ISet[Int],
+    todoAcc:     ISet[Int],
+    changedAcc:  ISet[Int])
 }

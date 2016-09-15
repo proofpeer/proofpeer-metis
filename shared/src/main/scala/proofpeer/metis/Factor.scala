@@ -30,8 +30,8 @@ class Factor[V:Order,F,P]
       case FactorEdge(atm1, atm2) => atm1.unify(θ,atm2)
       case ReflEdge(tm1, tm2)     => tm1.unify(θ,tm2)
     }) match {
-      case List() => Apart()
-      case σ::_   => if (θ == σ) Joined() else Joinable(σ)
+      case None    => Apart()
+      case Some(σ) => if (θ == σ) Joined() else Joinable(σ)
     }
   }
 
@@ -92,7 +92,7 @@ class Factor[V:Order,F,P]
     }.flatten
     val litSubEdges = combineSym(allLits) {
       case (Literal(pol,atm1),Literal(pol2,atm2)) if pol == pol2 =>
-        atm1.unify(Subst.empty[V,Term[V,F]],atm2).map {
+        atm1.unify(Subst.empty[V,Term[V,F]],atm2).toList.map {
           case θ => SubEdge(θ,FactorEdge(atm1,atm2))
         }
       case _ => List()
@@ -123,7 +123,7 @@ class Factor[V:Order,F,P]
   }
 
   private def fact(apart: List[Edge], θ: Subst[V,Term[V,F]], agenda: List[Edge]) = {
-    agenda.map(fact1).sequence.exec(apart,θ).map(_._2)
+    agenda.map(fact1).sequence.exec((apart,θ)).map(_._2)
   }
 
   /** Obtain the factorings substitutions of clause cl. Each factoring
@@ -133,7 +133,7 @@ class Factor[V:Order,F,P]
       cl[σ] is subsumed by cl[θ] for one of the returned substitutions θ.
       */
   def apply(cl: Clause[V,F,P]): Iterator[Subst[V,Term[V,F]]] = {
-    mkEdges(List() ++ cl.lits).flatMap {
+    mkEdges(List() ++ cl.lits.toList).flatMap {
       case (apart,θ,agenda) => fact(apart,θ,agenda)
     }
   }

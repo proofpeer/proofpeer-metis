@@ -50,7 +50,7 @@ object Subst {
   * @tparam type of subterms
   */
 trait GenTerm[V,T,GT] { this: GT =>
-  def frees: Set[V]
+  def frees(implicit ev: Order[V]): ISet[V]
   def freeIn(v: V): Boolean
   def subst(θ: Subst[V,T])(implicit ev: Order[V]): GT
 
@@ -59,8 +59,8 @@ trait GenTerm[V,T,GT] { this: GT =>
 
 trait MatchableTerm[V,T,GT] { this: GT =>
   /** Treat this term as a pattern and match it against term. */
-  def patMatch(θ: Subst[V,T], term: GT)(implicit ev: Order[V]): List[Subst[V,T]]
-  def unify(θ: Subst[V,T], term: GT)(implicit ev: Order[V]): List[Subst[V,T]]
+  def patMatch(θ: Subst[V,T], term: GT)(implicit ev: Order[V]): Option[Subst[V,T]]
+  def unify(θ: Subst[V,T], term: GT)(implicit ev: Order[V]): Option[Subst[V,T]]
 }
 
 trait Cursored[V,T,GT,C <: GenCursor[V,T,GT,C]] { this: GT =>

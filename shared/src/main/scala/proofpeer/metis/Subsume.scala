@@ -1,13 +1,15 @@
 package proofpeer.metis
 
-import Nets._
 import scala.collection.immutable.Map
 import scala.collection.SeqView
 import scalaz._
 import Scalaz._
 
+import LiteralInstances._
+import Nets._
+
 // TODO: A is currently unused. Provided in Metis for extra filtering.
-class Subsuming[V:Order, F, P, A] {
+class Subsuming[V:Order, F: Order, P: Order, A] {
   type Id   = Int
   type Size = Int
   case class NonUnit private[Subsuming](
@@ -73,17 +75,17 @@ class Subsuming[V:Order, F, P, A] {
       lits.toSeq.sortBy(_.heuristicSize)(scala.math.Ordering.Int.reverse)
     }
 
-    private def withSyms(lits: Set[Literal[V,F,P]]) = {
-      lits ++ (
-        for (Literal(isPositive,Eql(x,y)) <- lits)
-        yield Literal(isPositive,Eql[V,F,P](y,x))
-      )
-    }
+    private def withSyms(lits: ISet[Literal[V,F,P]]) =
+      lits.foldMap[ISet[Literal[V,F,P]]] {
+        case lit@Literal(isPositive,Eql(x,y)) =>
+          ISet.fromList(List(lit,Literal(isPositive,Eql[V,F,P](y,x))))
+        case lit => ISet.singleton(lit)
+      }
 
     private def incompatible(lit1: Literal[V,F,P]) = {
-      val lits = withSyms(Set(lit1))
+      val lits = withSyms(ISet.singleton(lit1))
 
-      lit2: Literal[V,F,P] => lits.exists(
+      lit2: Literal[V,F,P] => lits.any(
         _.unify(Subst.empty[V,Term[V,F]],lit2).isEmpty)
     }
 
@@ -171,12 +173,12 @@ class Subsuming[V:Order, F, P, A] {
         return true
 
       val lits    = cl.lits
-      val litSyms = withSyms(lits)
+      val litSyms = withSyms(lits).toList
 
       if (size == 0)
         return false
 
-      if (litSyms.view.exists { lit =>
+      if (litSyms.exists { lit =>
         this.units.matches(lit).find {
           case (lit_,_,_) =>
             !lit_.patMatch(Subst.empty[V,Term[V,F]],lit).isEmpty
