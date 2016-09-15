@@ -47,14 +47,10 @@ case class Literal[V,F,P](isPositive: Boolean, atom: Atom[V,F,P])
     Literal(isPositive,atom.subst(θ))
   override def patMatch(θ: Subst[V,Term[V,F]], lit: Literal[V,F,P])(
     implicit ev: Order[V]) =
-    if (isPositive == lit.isPositive)
-      atom.patMatch(θ,lit.atom)
-    else List()
+    if (isPositive == lit.isPositive) atom.patMatch(θ,lit.atom) else None
   override def unify(θ: Subst[V,Term[V,F]], lit: Literal[V,F,P])(
     implicit ev: Order[V]) =
-    if (isPositive == lit.isPositive)
-      atom.unify(θ,lit.atom)
-    else List()
+    if (isPositive == lit.isPositive) atom.unify(θ,lit.atom) else None
   override def heuristicSize = atom.heuristicSize
 
   override def topLeft =

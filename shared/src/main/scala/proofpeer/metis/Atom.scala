@@ -23,7 +23,8 @@ object Atom {
     override def replaceWith(replacement: Term[V,F]) =
       PredCursor(p,largs,cursor.replaceWith(replacement),rargs)
 
-    override def subst(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]): TermCursor[V,F,P] =
+    override def subst(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]):
+        TermCursor[V,F,P] =
       PredCursor(p,largs.map(_.subst(θ)), cursor.subst(θ), rargs.map(_.subst(θ)))
 
     override def down  = cursor.down.map(PredCursor(p,largs,_,rargs))
@@ -112,8 +113,9 @@ abstract sealed class Atom[V,F,P]
     case Eql(l,r)     => l.freeIn(v) || r.freeIn(v)
   }
 
-  override def patMatch(θ: Subst[V,Term[V,F]], atm: Atom[V,F,P])(implicit ev: Order[V]):
-      List[Subst[V,Term[V,F]]] =
+  override def patMatch(θ: Subst[V,Term[V,F]], atm: Atom[V,F,P])(
+    implicit ev: Order[V]):
+      Option[Subst[V,Term[V,F]]] =
     (this,atm) match {
       case (Pred(p1,args1), Pred(p2,args2))
           if p1 == p2 && args1.length == args2.length =>
@@ -125,11 +127,11 @@ abstract sealed class Atom[V,F,P]
           θ <- l1.patMatch(θ,l2);
           θ <- r1.patMatch(θ,r2))
         yield θ
-      case _ => List()
+      case _ => None
     }
 
   override def unify(θ: Subst[V,Term[V,F]], atm: Atom[V,F,P])(implicit ev: Order[V]):
-      List[Subst[V,Term[V,F]]] =
+      Option[Subst[V,Term[V,F]]] =
     (this,atm) match {
       case (Pred(p1,args1), Pred(p2,args2))
           if p1 == p2 && args1.length == args2.length =>
@@ -141,7 +143,7 @@ abstract sealed class Atom[V,F,P]
           θ <- l1.unify(θ,l2);
           θ <- r1.unify(θ,r2))
         yield θ
-      case _ => List()
+      case _ => None
     }
 
   override def heuristicSize = 1 + (this match {

@@ -111,9 +111,9 @@ abstract sealed class Term[V,F]
 
   override def patMatch(θ: Subst[V,Term[V,F]],term: Term[V,F])(
     implicit ev: Order[V]):
-      List[Subst[V,Term[V,F]]] = {
+      Option[Subst[V,Term[V,F]]] = {
     (this,term) match {
-      case (Var(v),tm) => θ.bind(v,tm).toList
+      case (Var(v),tm) => θ.bind(v,tm)
       case (Fun(f1,args1), Fun(f2,args2))
           if f1 == f2 && args1.length == args2.length =>
         (args1 zip args2).foldLeftM(θ) {
@@ -123,27 +123,31 @@ abstract sealed class Term[V,F]
             }
           }
         }
-      case _ => List()
+      case _ => None
     }
   }
 
   override def unify(θ: Subst[V,Term[V,F]],otherTerm: Term[V,F])(implicit
       ev: Order[V]):
-      List[Subst[V,Term[V,F]]] = {
+      Option[Subst[V,Term[V,F]]] = {
     (this,otherTerm) match {
-      case (Var(v1),Var(v2)) if v1 == v2 => List(θ)
+      case (Var(v1),Var(v2)) if v1 == v2 => Some(θ)
       case (Var(v),_) =>
         θ.lift(v) match {
           case None =>
             val otherTerm_ = otherTerm.subst(θ)
             if (this == otherTerm_)
-              List(θ)
+              Some(θ)
             else if (otherTerm_.freeIn(v))
-              List()
+              None
             else {
               val vMapping = Subst.empty[V,Term[V,F]].bind(v,otherTerm_).get
               val θ2 = θ.mapRhs { _.subst(vMapping) }
-              List(θ2.bind(v,otherTerm_).get)
+              val θ3 = θ2.bind(v,otherTerm_)
+              if (!θ3.isEmpty)
+                throw new RuntimeException("BUG: addition of binding failed, "
+                  ++ "but outer match assumes no previous binding existed.")
+              θ3
             }
           case Some(bndTerm) => bndTerm.unify(θ,otherTerm)
         }
@@ -153,7 +157,7 @@ abstract sealed class Term[V,F]
         (args1 zip args2).foldLeftM(θ) {
           case (θ, (arg1,arg2)) => arg1.unify(θ,arg2)
         }
-      case _ => List()
+      case _ => None
     }
   }
 
