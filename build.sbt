@@ -12,13 +12,8 @@ lazy val metis = crossProject.in(file(".")).
     organization := "net.proofpeer",
     version := "0.2-SNAPSHOT",
     scalaVersion in ThisBuild := "2.11.8",
-    libraryDependencies += "org.ensime" %% "s-express" % "2.0.0-SNAPSHOT"
-  ).
-  jvmSettings(
+    libraryDependencies += "org.ensime" %% "s-express" % "2.0.0-SNAPSHOT",
     libraryDependencies += "org.scalaz" %% "scalaz-core" % "latest.integration"
-  ).
-  jsSettings(
-    libraryDependencies += "com.github.japgolly.fork.scalaz" %%% "scalaz-core" % "latest.integration"
   )
 lazy val metisJVM = metis.jvm
 lazy val metisJS  = metis.js
