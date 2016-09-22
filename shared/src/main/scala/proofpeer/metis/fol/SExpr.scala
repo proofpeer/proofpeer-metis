@@ -83,9 +83,11 @@ object SExpr {
         SexpList(SexpList(SexpSymbol("not")), SExprOfTerm(x))
       case Pred(p,args) => SexpList(p :: args.map(SExprOfTerm(_)))
     }
-  def invert(str: String) = {
-    folOfSExpr(SexpParser.parse(str)).map { sexpr =>
-      SexpCompactPrinter(SExprOfFol(sexpr))
-    }
+
+  def invertTest(str: String) = {
+    val sexpr = SexpParser.parse(str)
+    folOfSExpr(sexpr).map { fol =>
+      SExprOfFol(fol) == sexpr
+    }.getOrElse(true)
   }
 }
