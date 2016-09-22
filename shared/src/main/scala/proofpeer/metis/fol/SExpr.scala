@@ -81,7 +81,7 @@ object SExpr {
         SexpList(SexpList(sym),SExprOfTerm(l),SExprOfTerm(r))
       case Bnding(FOL.Exists, v, body) =>
         SexpList(SexpSymbol("ex"),v,SExprOfFol(body,resugar))
-      case And(Or(Unary(FOL.Neg(),p1),q1), Or(Unary(FOL.Neg(),p2),q2))
+      case And(Or(Unary(FOL.Neg(),p1),q1), Or(Unary(FOL.Neg(),q2),p2))
           if resugar && p1 === p2 && q1 === q2 =>
         SexpList(SexpSymbol("<->"), SExprOfFol(p1,resugar), SExprOfFol(q1,resugar))
       case Or(Unary(FOL.Neg(),p),q) if resugar =>
