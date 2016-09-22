@@ -101,6 +101,18 @@ object FOL {
     implicit def NegIsShow = new Show[Neg] {
       override def show(neg: Neg) = Cord("~")
     }
+
+    implicit def NegIsOrder = new Order[Neg] {
+      override def order(x:Neg,y:Neg) = Ordering.EQ
+    }
+    implicit def BindingIsOrder = new Order[Binder] {
+      override def order(x:Binder,y:Binder) = (x,y) match {
+        case (Exists, Exists) => Ordering.EQ
+        case (Exists, All) => Ordering.LT
+        case (All, Exists) => Ordering.GT
+        case (All, All) => Ordering.EQ
+      }
+    }
   }
 
   def toNNF[V,F,P,U](fol: FOL[V,F,P,Neg,Binder]):

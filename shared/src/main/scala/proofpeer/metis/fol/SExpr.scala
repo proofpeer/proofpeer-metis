@@ -1,10 +1,12 @@
 package proofpeer.metis.fol
 
 import org.ensime.sexp._
+import org.ensime.sexp.Sexp.{ SexpIsOrder }
 import scalaz._
 import Scalaz._
 
 import proofpeer.metis.SExpr._
+import FOL.Instances._
 
 /** S-expression syntax for FOL
 
@@ -26,6 +28,8 @@ import proofpeer.metis.SExpr._
 
   - Predicates of one-argument whose first element is 'not must have the symbol
   disambiguated.
+
+  Implications and equivalences are sugar.
 */
 
 object SExpr {
@@ -34,7 +38,7 @@ object SExpr {
     q: FOL[Sexp, Sexp, Sexp, FOL.Neg, B]):
       FOL[Sexp, Sexp, Sexp, FOL.Neg, B] =
     Or(Unary(FOL.Neg(),p),q)
-  def folOfSExpr(sexpr: Sexp):
+  def folOfSExpr(sexpr: Sexp, desugar: Boolean):
       ValidationNel[(Sexp, String), FOL[Sexp, Sexp, Sexp, FOL.Neg, FOL.Binder]] =
     sexpr match {
       case SexpList(List(SexpList(List(sym@SexpSymbol(str))), x, y))
@@ -42,21 +46,21 @@ object SExpr {
           str == "->" || str == "<->" =>
         Pred(sym:Sexp, List(termOfSExpr(x), termOfSExpr(y))).success
       case SexpList(List(SexpSymbol("!"), v, body)) =>
-        folOfSExpr(body).map { Bnding(FOL.All, v, _) }
+        folOfSExpr(body,desugar).map { Bnding(FOL.All, v, _) }
       case SexpList(List(SexpSymbol("?"), v, body)) =>
-        folOfSExpr(body).map { Bnding(FOL.Exists, v, _) }
+        folOfSExpr(body,desugar).map { Bnding(FOL.Exists, v, _) }
       case SexpList(List(SexpSymbol("and"), p, q)) =>
-        (folOfSExpr(p) |@| folOfSExpr(q)) { And(_,_) }
+        (folOfSExpr(p,desugar) |@| folOfSExpr(q,desugar)) { And(_,_) }
       case SexpList(List(SexpSymbol("or"), p, q)) =>
-        (folOfSExpr(p) |@| folOfSExpr(q)) { Or(_,_) }
+        (folOfSExpr(p,desugar) |@| folOfSExpr(q,desugar)) { Or(_,_) }
       case SexpList(List(SexpSymbol("not"), p)) =>
-        folOfSExpr(p).map { Unary(FOL.Neg(),_) }
+        folOfSExpr(p,desugar).map { Unary(FOL.Neg(),_) }
       case SexpList(List(SexpList(List(sym@SexpSymbol("not"))), x)) =>
         Pred(sym:Sexp, List(termOfSExpr(x))).success
-      case SexpList(List(SexpSymbol("->"), p, q)) =>
-        (folOfSExpr(p) |@| folOfSExpr(q)) { folOfImplies(_,_) }
-      case SexpList(List(SexpSymbol("<->"), p, q)) =>
-        (folOfSExpr(p) |@| folOfSExpr(q)) {
+      case SexpList(List(SexpSymbol("->"), p, q)) if desugar =>
+        (folOfSExpr(p,desugar) |@| folOfSExpr(q,desugar)) { folOfImplies(_,_) }
+      case SexpList(List(SexpSymbol("<->"), p, q)) if desugar =>
+        (folOfSExpr(p,desugar) |@| folOfSExpr(q,desugar)) {
           (p,q) => And(
             folOfImplies(p, q),
             folOfImplies(q, p))
@@ -65,29 +69,37 @@ object SExpr {
         Pred(p, args.map(termOfSExpr(_))).success
       case _ => (sexpr, "formula expected").failureNel
     }
-  def SExprOfFol(fol: FOL[Sexp,Sexp,Sexp,FOL.Neg,FOL.Binder]): Sexp =
+  def SExprOfFol(
+    fol: FOL[Sexp,Sexp,Sexp,FOL.Neg,FOL.Binder],
+    resugar: Boolean): Sexp =
     fol match {
       case Bnding(FOL.All, v, body) =>
-        SexpList(SexpSymbol("!"),v,SExprOfFol(body))
+        SexpList(SexpSymbol("!"),v,SExprOfFol(body,resugar))
       case Pred(sym@SexpSymbol(str), List(l, r))
           if str === "!" || str === "?" || str === "and" || str === "or"
-          | str == "->" || str == "<->" =>
+          || str == "->" || str == "<->" =>
         SexpList(SexpList(sym),SExprOfTerm(l),SExprOfTerm(r))
       case Bnding(FOL.Exists, v, body) =>
-        SexpList(SexpSymbol("ex"),v,SExprOfFol(body))
+        SexpList(SexpSymbol("ex"),v,SExprOfFol(body,resugar))
+      case And(Or(Unary(FOL.Neg(),p1),q1), Or(Unary(FOL.Neg(),p2),q2))
+          if resugar && p1 === p2 && q1 === q2 =>
+        SexpList(SexpSymbol("<->"), SExprOfFol(p1,resugar), SExprOfFol(q1,resugar))
+      case Or(Unary(FOL.Neg(),p),q) if resugar =>
+        SexpList(SexpSymbol("->"), SExprOfFol(p,resugar), SExprOfFol(q,resugar))
       case And(p,q) =>
-        SexpList(SexpSymbol("and"), SExprOfFol(p), SExprOfFol(q))
-      case Or(p,q) => SexpList(SexpSymbol("or"), SExprOfFol(p), SExprOfFol(q))
-      case Unary(FOL.Neg(), p) => SexpList(SexpSymbol("not"), SExprOfFol(p))
+        SexpList(SexpSymbol("and"), SExprOfFol(p,resugar), SExprOfFol(q,resugar))
+      case Or(p,q) =>
+        SexpList(SexpSymbol("or"), SExprOfFol(p,resugar), SExprOfFol(q,resugar))
+      case Unary(FOL.Neg(), p) => SexpList(SexpSymbol("not"), SExprOfFol(p,resugar))
       case Pred(sym@SexpSymbol("not"),List(x)) =>
         SexpList(SexpList(SexpSymbol("not")), SExprOfTerm(x))
       case Pred(p,args) => SexpList(p :: args.map(SExprOfTerm(_)))
     }
 
-  def invertTest(str: String) = {
-    val sexpr = SexpParser.parse(str)
-    folOfSExpr(sexpr).map { fol =>
-      SExprOfFol(fol) == sexpr
+  // sexpr should be an s-expression representing a fol without sugar
+  def invertTest(sexpr: Sexp) = {
+    folOfSExpr(sexpr,false).map { fol =>
+      SExprOfFol(fol,false) == sexpr
     }.getOrElse(true)
   }
 }
