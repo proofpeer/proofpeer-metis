@@ -43,27 +43,6 @@ object Debug {
     theX
   }
 
-  def debugShowsTerm[V,F](term: Term[V,F]) = {
-    import TermInstances._
-    term match {
-      case strTerm: Term[String,String] => strTerm.shows
-    }
-  }
-
-  def debugShowsLiteral[V,F,P](lit: Literal[V,F,P]) = {
-    import LiteralInstances._
-    lit match {
-      case strLit: Literal[String,String,String] => strLit.shows
-    }
-  }
-
-  def debugShowsClause[V,F,P](cl: Clause[V,F,P]) = {
-    import ClauseInstances._
-    cl match {
-      case strCl: Clause[String,String,String] => strCl.shows
-    }
-  }
-
   def toAlphaNum(str: String) = {
     import java.nio.charset._
     val ascii =
