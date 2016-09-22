@@ -10,6 +10,8 @@
 
    ;; use sbt-run-previous-command to re-compile your code after changes
    (local-set-key (kbd "C-x '") 'sbt-run-previous-command))
+(add-hook 'lisp-mode-hook 'paredit-mode)
+(add-hook 'emacs-lisp-mode-hook 'paredit-mode)
 (add-hook 'scala-mode-hook 'scala-hook)
 (add-hook 'scala-mode-hook 'whitespace-mode)
 (add-hook 'scala-mode-hook 'subword-mode)
