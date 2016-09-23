@@ -17,3 +17,7 @@
 (add-hook 'scala-mode-hook 'subword-mode)
 (global-set-key (kbd "C-c l") 'org-store-link)
 (require 'helm-config)
+(helm-mode 1)
+(projectile-global-mode)
+(setq projectile-completion-system 'helm)
+(helm-projectile-on)
