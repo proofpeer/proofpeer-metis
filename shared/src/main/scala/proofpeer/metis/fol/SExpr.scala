@@ -42,12 +42,12 @@ object SExpr {
       ValidationNel[(Sexp, String), FOL[Sexp, Sexp, Sexp, FOL.Neg, FOL.Binder]] =
     sexpr match {
       case SexpList(List(SexpList(List(sym@SexpSymbol(str))), x, y))
-          if str === "!" || str === "?" || str === "and" || str === "or" ||
+          if str === "!" || str === "ex" || str === "and" || str === "or" ||
           str == "->" || str == "<->" =>
         Pred(sym:Sexp, List(termOfSExpr(x), termOfSExpr(y))).success
       case SexpList(List(SexpSymbol("!"), v, body)) =>
         folOfSExpr(body,desugar).map { Bnding(FOL.All, v, _) }
-      case SexpList(List(SexpSymbol("?"), v, body)) =>
+      case SexpList(List(SexpSymbol("ex"), v, body)) =>
         folOfSExpr(body,desugar).map { Bnding(FOL.Exists, v, _) }
       case SexpList(List(SexpSymbol("and"), p, q)) =>
         (folOfSExpr(p,desugar) |@| folOfSExpr(q,desugar)) { And(_,_) }
@@ -76,7 +76,7 @@ object SExpr {
       case Bnding(FOL.All, v, body) =>
         SexpList(SexpSymbol("!"),v,SExprOfFol(body,resugar))
       case Pred(sym@SexpSymbol(str), List(l, r))
-          if str === "!" || str === "?" || str === "and" || str === "or"
+          if str === "!" || str === "ex" || str === "and" || str === "or"
           || str == "->" || str == "<->" =>
         SexpList(SexpList(sym),SExprOfTerm(l),SExprOfTerm(r))
       case Bnding(FOL.Exists, v, body) =>
