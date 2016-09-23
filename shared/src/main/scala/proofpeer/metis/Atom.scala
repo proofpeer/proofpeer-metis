@@ -90,6 +90,12 @@ object Atom {
     override def up    = cursor.up.map(RHSCursor(lhs,_))
     override def top   = Eql(lhs,cursor.top)
   }
+
+  def trimap[V,F,P,V_,F_,P_](atm: Atom[V,F,P])(
+    f: V => V_, g: F => F_, h: P => P_): Atom[V_,F_,P_] = atm match {
+    case Pred(p,args) => Pred(h(p),args.map(_.bimap(f,g)))
+    case Eql(l,r) => Eql(l.bimap(f,g),r.bimap(f,g))
+  }
 }
 
 /** Atomic formulas for first-order logic with equality.

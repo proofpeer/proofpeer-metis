@@ -53,6 +53,11 @@ object Clause {
     def literal        = cursor.top
     def literalCursor  = cursor
   }
+
+  def trimap[V:Order,F:Order,P:Order,V_ :Order,F_ :Order,P_ :Order](
+    cl: Clause[V,F,P])(
+    f: V => V_, g: F => F_, h: P => P_): Clause[V_,F_,P_] =
+    Clause(cl.lits.map(Literal.trimap(_)(f,g,h)))
 }
 
 /** Clauses, implicitly a set of literals, of which the clause is their

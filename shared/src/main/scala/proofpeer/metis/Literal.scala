@@ -25,6 +25,10 @@ object Literal {
     override def right = cursor.right.map(TermCursor(isPositive,_))
     override def top   = Literal(isPositive,cursor.top)
   }
+
+  def trimap[V,F,P,V_,F_,P_](lit: Literal[V,F,P])(
+    f: V => V_, g: F => F_, h: P => P_): Literal[V_,F_,P_] =
+    Literal(lit.isPositive, Atom.trimap(lit.atom)(f,g,h))
 }
 
 /** Literals: atomic formulas and their negations.
