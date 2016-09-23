@@ -47,6 +47,33 @@ object FOL {
     }
   }
 
+  def frees[V:Order,F,P,U,B](fol: FOL[V,F,P,U,B]): ISet[V] = fol match {
+    case Pred(p,args) => args.foldMap(_.frees)
+    case And(p,q) => frees(p) |+| frees(q)
+    case Or(p,q) => frees(p) |+| frees(q)
+    case Unary(_,p) => frees(p)
+    case Bnding(_,v,p) => frees(p).delete(v)
+  }
+
+  def instPred[V:Order,F,P,U,B](fol: FOL[V,F,P,U,B])(
+    inst: (P,List[Term[V,F]]) => FOL[V,F,P,U,B]): FOL[V,F,P,U,B] = {
+    def instP(fol: FOL[V,F,P,U,B], bound: ISet[V]): FOL[V,F,P,U,B] =
+      fol match {
+        case fm@Pred(p,args) =>
+          val predFrees = args.foldMap(_.frees)
+          val mustAvoid = bound.difference(predFrees)
+          val instantiated = inst(p,args)
+          if (frees(instantiated).intersection(mustAvoid).isEmpty)
+            instantiated
+          else fm
+        case And(p,q)       => And(instP(p,bound),instP(q,bound))
+        case Or(p,q)        => Or(instP(p,bound),instP(q,bound))
+        case Unary(u,p)     => Unary(u,instP(p,bound))
+        case Bnding(b,v,p)  => Bnding(b,v,instP(p,bound.insert(v)))
+      }
+    instP(fol, ∅[ISet[V]])
+  }
+
   object Instances {
     implicit def FOLIsFunctor[F,P,Un,B]: Functor[({type λ[V] = FOL[V,F,P,Un,B]})#λ] =
     new Functor[({type λ[V] = FOL[V,F,P,Un,B]})#λ] {
