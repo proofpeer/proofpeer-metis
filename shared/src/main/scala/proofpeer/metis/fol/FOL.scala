@@ -207,10 +207,8 @@ object Matrix {
         yield (Or(pmatrix,qmatrix),Or(pfol,qfol))
         case Unary(void,_) => void
         case Bnding(b,v,p) => bindFresh(v) >>= {
-          v:Fresh[V] => qp(p) >>= { case (qfol,nfol) =>
-            (qfol,nfol).point[QPM] :++> (List((b,v)))
+          v:Fresh[V] => List((b,v)) <++: qp(p)
           }
-        }
         case pred@Pred(p,args) =>
           getSubst map { θ =>
             val newargs = args.map(_.map(v =>
