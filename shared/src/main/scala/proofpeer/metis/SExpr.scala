@@ -68,7 +68,7 @@ object SExpr {
   }
   def SExprOfTerm(tm: Term[Sexp,Sexp]): Sexp = tm match {
     case Var(v) => v
-    case Fun(f, args) => SexpList(SexpList(f) :: args.map(SExprOfTerm(_)))
+    case Fun(f, args) => SexpList(f :: args.map(SExprOfTerm(_)))
   }
   def SExprOfAtom(pred: Atom[Sexp, Sexp, Sexp]): Sexp = pred match {
     case Pred(sym@SexpSymbol("not"), List(p)) =>
