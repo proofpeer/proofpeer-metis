@@ -23,7 +23,7 @@ object Atom {
     override def replaceWith(replacement: Term[V,F]) =
       PredCursor(p,largs,cursor.replaceWith(replacement),rargs)
 
-    override def subst(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]):
+    override def subst(θ: PartialFunction[V,Term[V,F]])(implicit ev: Order[V]):
         TermCursor[V,F,P] =
       PredCursor(p,largs.map(_.subst(θ)), cursor.subst(θ), rargs.map(_.subst(θ)))
 
@@ -60,7 +60,7 @@ object Atom {
     override def get = cursor.get
     override def replaceWith(replacement: Term[V,F]) =
       LHSCursor(cursor.replaceWith(replacement),rhs)
-    override def subst(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]) =
+    override def subst(θ: PartialFunction[V,Term[V,F]])(implicit ev: Order[V]) =
       new LHSCursor(cursor.subst(θ),rhs.subst(θ))
     override def down  = cursor.down.map(LHSCursor(_,rhs))
     override def left  = cursor.left.map(LHSCursor(_,rhs))
@@ -79,7 +79,7 @@ object Atom {
     override def get = cursor.get
     override def replaceWith(replacement: Term[V,F]) =
       RHSCursor(lhs,cursor.replaceWith(replacement))
-    override def subst(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]) =
+    override def subst(θ: PartialFunction[V,Term[V,F]])(implicit ev: Order[V]) =
       RHSCursor(lhs.subst(θ),cursor.subst(θ))
     override def down  = cursor.down.map(RHSCursor(lhs,_))
     override def left  =
@@ -170,13 +170,15 @@ abstract sealed class Atom[V,F,P]
 /** Predications P(...args...) */
 case class Pred[V,F,P](functor: P, args: List[Term[V,F]])
     extends Atom[V,F,P] {
-  override def subst(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]): Pred[V,F,P] =
+  override def subst(θ: PartialFunction[V,Term[V,F]])(implicit ev: Order[V]):
+      Pred[V,F,P] =
     Pred(functor,args.map(_.subst(θ)))
 }
 
 /** Equations */
 case class Eql[V,F,P](l: Term[V,F], r: Term[V,F]) extends Atom[V,F,P] {
-  override def subst(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]): Eql[V,F,P] =
+  override def subst(θ: PartialFunction[V,Term[V,F]])(implicit ev: Order[V]):
+      Eql[V,F,P] =
     Eql(l.subst(θ),r.subst(θ))
 }
 

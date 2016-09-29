@@ -51,7 +51,7 @@ object Term {
       case Arg(FunCursor(f,largs,_,rargs),ctx) =>
         Arg(FunCursor(f,largs,tm,rargs),ctx)
     }
-    override def subst(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]) = {
+    override def subst(θ: PartialFunction[V,Term[V,F]])(implicit ev: Order[V]) = {
       def substLevel(lvl: FunCursor[V,F,Unit]) = {
         val FunCursor(f,largs,(),rargs) = lvl
         FunCursor(f,largs.map(_.subst(θ)),(),rargs.map(_.subst(θ)))
@@ -168,7 +168,7 @@ abstract sealed class Term[V,F]
   //   * As in much of the HOL Light kernel code, terms are not reconstructed if
   //     the constructor arguments are pointer-equal. Could go for this without
   //     having to change any types.
-  override def subst(θ: Subst[V,Term[V,F]])(implicit ev: Order[V]) = {
+  override def subst(θ: PartialFunction[V,Term[V,F]])(implicit ev: Order[V]) = {
     def sub(term: Term[V,F]): Term[V,F] = {
       term match {
         case Var(v)      => θ.lift(v).getOrElse(term)

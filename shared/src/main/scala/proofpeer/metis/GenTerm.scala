@@ -52,7 +52,7 @@ object Subst {
 trait GenTerm[V,T,GT] { this: GT =>
   def frees(implicit ev: Order[V]): ISet[V]
   def freeIn(v: V): Boolean
-  def subst(θ: Subst[V,T])(implicit ev: Order[V]): GT
+  def subst(θ: PartialFunction[V,T])(implicit ev: Order[V]): GT
 
   def heuristicSize: Int
 }
@@ -102,7 +102,7 @@ trait GenCursor[V,T,GT,C <: GenCursor[V,T,GT,C]] { this: C =>
   /** Replace the term under the cursor. */
   def replaceWith(T: T): C
 
-  def subst(θ: Subst[V,T])(implicit ev: Order[V]): C
+  def subst(θ: PartialFunction[V,T])(implicit ev: Order[V]): C
 
   def allSubterms: List[C] =
     this :: (for (
