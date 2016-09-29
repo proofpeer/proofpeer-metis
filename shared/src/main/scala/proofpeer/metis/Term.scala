@@ -144,7 +144,7 @@ abstract sealed class Term[V,F]
               val vMapping = Subst.empty[V,Term[V,F]].bind(v,otherTerm_).get
               val θ2 = θ.mapRhs { _.subst(vMapping) }
               val θ3 = θ2.bind(v,otherTerm_)
-              if (!θ3.isEmpty)
+              if (θ3.isEmpty)
                 throw new RuntimeException("BUG: addition of binding failed, "
                   ++ "but outer match assumes no previous binding existed.")
               θ3
