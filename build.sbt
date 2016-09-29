@@ -17,7 +17,7 @@ lazy val metis = crossProject.in(file(".")).
     libraryDependencies += "org.ensime" %% "s-express" % "2.0.0-SNAPSHOT",
     libraryDependencies += "org.scalaz" %% "scalaz-core" % "latest.integration",
     initialCommands in console := """
-import proofpeer.metis.fol.sttzf.Axioms._
+import proofpeer.metis.fol.sttzf.ZFProver._
 import org.ensime.sexp.{ SexpCompactPrinter => SexpPrinter }
 import proofpeer.metis.fol.SExpr.{ SExprOfFol }
 import proofpeer.metis.fol._
