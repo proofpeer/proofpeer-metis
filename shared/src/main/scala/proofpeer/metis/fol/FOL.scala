@@ -55,6 +55,37 @@ object FOL {
     case Bnding(_,v,p) => frees(p).delete(v)
   }
 
+  def inst[V:Order,F,P,U,B](fol: FOL[V,F,P,U,B])(f: V => Term[V,F]) = {
+    def instV(fol: FOL[V,F,P,U,B], bound: ISet[V]): FOL[V,F,P,U,B] = fol match {
+      case Pred(p,args) => Pred(p,args.map { _.subst {
+        v => if (bound.contains(v)) f(v) else Var(v)
+      }})
+      case And(p,q) => And(instV(p,bound)(f),instV(q,bound)(f))
+      case Or(p,q) => Or(instV(p,bound)(f),instV(q,bound)(f))
+      case Unary(u,p) => Unary(u,instV(p,bound)(f))
+      case Bnding(b,v,p) => Unary(u,instV(p,bound.insert(v))(f))
+    }
+  }
+
+  def instPred1[V:Order,F,P,U,B](fol: FOL[V,F,P,U,B])(
+    inst: (P,Term[V,F]) => FOL[V,F,P,U,B]): FOL[V,F,P,U,B] = {
+    def instP(fol: FOL[V,F,P,U,B], bound: ISet[V]): FOL[V,F,P,U,B] =
+      fol match {
+        case fm@Pred(p,List(arg)) =>
+          val predFrees = arg.frees
+          val mustAvoid = bound.difference(predFrees)
+          val instantiated = inst(p,arg)
+          if (frees(instantiated).intersection(mustAvoid).isEmpty)
+            instantiated
+          else fm
+        case And(p,q)       => And(instP(p,bound),instP(q,bound))
+        case Or(p,q)        => Or(instP(p,bound),instP(q,bound))
+        case Unary(u,p)     => Unary(u,instP(p,bound))
+        case Bnding(b,v,p)  => Bnding(b,v,instP(p,bound.insert(v)))
+      }
+    instP(fol, ∅[ISet[V]])
+  }
+
   def instPred[V:Order,F,P,U,B](fol: FOL[V,F,P,U,B])(
     inst: (P,List[Term[V,F]]) => FOL[V,F,P,U,B]): FOL[V,F,P,U,B] = {
     def instP(fol: FOL[V,F,P,U,B], bound: ISet[V]): FOL[V,F,P,U,B] =

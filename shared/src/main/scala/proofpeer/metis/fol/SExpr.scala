@@ -5,7 +5,9 @@ import org.ensime.sexp.Sexp.{ SexpIsOrder }
 import scalaz._
 import Scalaz._
 
+import proofpeer.metis.Term
 import proofpeer.metis.SExpr._
+import FOL._
 import FOL.Instances._
 
 /** S-expression syntax for FOL
@@ -38,6 +40,7 @@ object SExpr {
     q: FOL[Sexp, Sexp, Sexp, FOL.Neg, B]):
       FOL[Sexp, Sexp, Sexp, FOL.Neg, B] =
     Or(Unary(FOL.Neg(),p),q)
+
   def folOfSExpr(sexpr: Sexp, desugar: Boolean):
       ValidationNel[(Sexp, String), FOL[Sexp, Sexp, Sexp, FOL.Neg, FOL.Binder]] =
     sexpr match {
@@ -69,6 +72,17 @@ object SExpr {
         Pred(p, args.map(termOfSExpr(_))).success
       case _ => (sexpr, "formula expected").failureNel
     }
+  def lambdaOfSExpr(sexpr: Sexp, desugar: Boolean):
+      ValidationNel[(Sexp, String),
+        Term[Sexp,Sexp] => FOL[Sexp,Sexp,Sexp,FOL.Neg,FOL.Binder]] =
+    sexpr match {
+      case SexpList(List(x, body)) =>
+        folOfSExpr(body,desugar).map {
+          fol => arg:Sexp =>
+          trimap(fol)({ y => if (x === y) arg else y }, f => f, p => p)
+        }
+      case _ => (sexpr, "lambda expected").failureNel
+  }
   def SExprOfFol(
     fol: FOL[Sexp,Sexp,Sexp,FOL.Neg,FOL.Binder],
     resugar: Boolean): Sexp =
@@ -95,7 +109,6 @@ object SExpr {
         SexpList(SexpList(SexpSymbol("not")), SExprOfTerm(x))
       case Pred(p,args) => SexpList(p :: args.map(SExprOfTerm(_)))
     }
-
   // sexpr should be an s-expression representing a fol without sugar
   def invertTest(sexpr: Sexp) = {
     folOfSExpr(sexpr,false).map { fol =>
