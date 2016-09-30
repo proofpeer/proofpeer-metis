@@ -17,7 +17,7 @@ object Literal {
     override def get = cursor.get
     override def replaceWith(replacement: Term[V,F]) =
       TermCursor(isPositive,cursor.replaceWith(replacement))
-    override def subst(θ: PartialFunction[V,Term[V,F]])(implicit ev: Order[V]) =
+    override def subst(θ: V => Option[Term[V,F]])(implicit ev: Order[V]) =
       TermCursor(isPositive,cursor.subst(θ))
     override def down  = cursor.down.map(TermCursor(isPositive,_))
     override def up    = cursor.up.map(TermCursor(isPositive,_))
@@ -43,7 +43,7 @@ case class Literal[V,F,P](isPositive: Boolean, atom: Atom[V,F,P])
 
   override def frees(implicit ev: Order[V]) = atom.frees
   override def freeIn(v: V) = atom.freeIn(v)
-  override def subst(θ: PartialFunction[V,Term[V,F]])(implicit ev: Order[V]) =
+  override def subst(θ: V => Option[Term[V,F]])(implicit ev: Order[V]) =
     Literal(isPositive,atom.subst(θ))
   override def patMatch(θ: Subst[V,Term[V,F]], lit: Literal[V,F,P])(
     implicit ev: Order[V]) =

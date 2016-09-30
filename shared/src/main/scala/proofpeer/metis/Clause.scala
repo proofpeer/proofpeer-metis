@@ -21,9 +21,9 @@ object Clause {
     override def get = cursor.get
     override def replaceWith(replacement: Term[V,F]) =
       TermCursor(largs,cursor.replaceWith(replacement),rargs)
-    override def subst(θ: PartialFunction[V,Term[V,F]])(implicit ev: Order[V]) =
+    override def subst(θ: V => Option[Term[V,F]])(implicit ev: Order[V]) =
       substImpl(θ)
-    def substImpl(θ: PartialFunction[V,Term[V,F]]) =
+    def substImpl(θ: V => Option[Term[V,F]]) =
       TermCursor(largs.map(_.subst(θ)),cursor.subst(θ),rargs.map(_.subst(θ)))
     override def down  = cursor.down.map(TermCursor(largs,_,rargs))
     override def up    = cursor.up.map(TermCursor(largs,_,rargs))
@@ -72,9 +72,9 @@ case class Clause[V:Order,F:Order,P:Order](lits: ISet[Literal[V,F,P]])
   override def frees(implicit ev: Order[V]) = freesImpl
   def freesImpl = lits.foldMap(_.frees)
   override def freeIn(v: V) = lits.any(_.freeIn(v))
-  override def subst(θ: PartialFunction[V,Term[V,F]])(implicit ev: Order[V]) =
+  override def subst(θ: V => Option[Term[V,F]])(implicit ev: Order[V]) =
     substImpl(θ)
-  def substImpl(θ: PartialFunction[V,Term[V,F]]) = new Clause(lits.map(_.subst(θ)))
+  def substImpl(θ: V => Option[Term[V,F]]) = new Clause(lits.map(_.subst(θ)))
   override def heuristicSize = lits.toList.map(_.heuristicSize).sum
 
   override def topLeft =

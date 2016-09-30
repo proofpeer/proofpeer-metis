@@ -10,9 +10,8 @@ import Scalaz._
   * @tparam V alphabet from which variables are drawn
   * @tparam T type of terms substituted
   */
-case class Subst[V:Order,T](θ: V ==>> T) extends PartialFunction[V,T] {
-  override def isDefinedAt(v: V) = θ.member(v)
-  override def apply(v: V): T = this.lookup(v).get
+case class Subst[V:Order,T](θ: V ==>> T) extends Function[V,Option[T]] {
+  override def apply(v: V): Option[T] = this.lookup(v)
 
   def lookup(v: V) = θ.lookup(v)
 
@@ -52,7 +51,7 @@ object Subst {
 trait GenTerm[V,T,GT] { this: GT =>
   def frees(implicit ev: Order[V]): ISet[V]
   def freeIn(v: V): Boolean
-  def subst(θ: PartialFunction[V,T])(implicit ev: Order[V]): GT
+  def subst(θ: V => Option[T])(implicit ev: Order[V]): GT
 
   def heuristicSize: Int
 }
@@ -102,7 +101,7 @@ trait GenCursor[V,T,GT,C <: GenCursor[V,T,GT,C]] { this: C =>
   /** Replace the term under the cursor. */
   def replaceWith(T: T): C
 
-  def subst(θ: PartialFunction[V,T])(implicit ev: Order[V]): C
+  def subst(θ: V => Option[T])(implicit ev: Order[V]): C
 
   def allSubterms: List[C] =
     this :: (for (

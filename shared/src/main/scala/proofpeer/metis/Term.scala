@@ -51,7 +51,7 @@ object Term {
       case Arg(FunCursor(f,largs,_,rargs),ctx) =>
         Arg(FunCursor(f,largs,tm,rargs),ctx)
     }
-    override def subst(θ: PartialFunction[V,Term[V,F]])(implicit ev: Order[V]) = {
+    override def subst(θ: V => Option[Term[V,F]])(implicit ev: Order[V]) = {
       def substLevel(lvl: FunCursor[V,F,Unit]) = {
         val FunCursor(f,largs,(),rargs) = lvl
         FunCursor(f,largs.map(_.subst(θ)),(),rargs.map(_.subst(θ)))
@@ -133,7 +133,7 @@ abstract sealed class Term[V,F]
     (this,otherTerm) match {
       case (Var(v1),Var(v2)) if v1 == v2 => Some(θ)
       case (Var(v),_) =>
-        θ.lift(v) match {
+        θ(v) match {
           case None =>
             val otherTerm_ = otherTerm.subst(θ)
             if (this == otherTerm_)
@@ -162,16 +162,13 @@ abstract sealed class Term[V,F]
   }
 
   // Removed optimisations from the SML:
-  //   * In Hurd's, a substitution is a map and can be checked for emptiness, in
-  //     which case the term is not traversed. We could go with this, but would have
-  //     to use a more specific type than PartialFunction to represent θ.
   //   * As in much of the HOL Light kernel code, terms are not reconstructed if
   //     the constructor arguments are pointer-equal. Could go for this without
   //     having to change any types.
-  override def subst(θ: PartialFunction[V,Term[V,F]])(implicit ev: Order[V]) = {
+  override def subst(θ: V => Option[Term[V,F]])(implicit ev: Order[V]) = {
     def sub(term: Term[V,F]): Term[V,F] = {
       term match {
-        case Var(v)      => θ.lift(v).getOrElse(term)
+        case Var(v)      => θ(v).getOrElse(term)
         case Fun(f,args) => Fun(f,args.map(sub))
       }
     }

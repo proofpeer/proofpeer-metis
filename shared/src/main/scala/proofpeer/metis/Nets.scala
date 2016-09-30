@@ -51,7 +51,7 @@ object Nets {
     }
   }
 
-  type QSubst[V,F] = PartialFunction[V,Term[Unit,(F,Int)]]
+  type QSubst[V,F] = Map[V,Term[Unit,(F,Int)]]
 
   private def canUnifyQTerms[F](qtm:  Term[Unit,(F,Int)],qtm2: Term[Unit,(F,Int)]):
       Boolean = {
@@ -70,8 +70,8 @@ object Nets {
     qtm: Term[Unit,(F,Int)]): Option[QSubst[V,F]] = {
     (tm,qtm) match {
       case (Var(v),qtm) => θ.lift(v) match {
-        case None                                =>
-          Some(θ.orElse(Map(v → qtm)))
+        case None           =>
+          Some(θ + (v → qtm))
         case Some(qtm2) if canUnifyQTerms(qtm,qtm2) => Some(θ)
         case _                                      => None
       }
@@ -197,7 +197,7 @@ object Nets {
     (qtm,pat) match {
       case (_,(Var(v))) =>
         θ.lift(v) match {
-          case None       => Some(θ.orElse(Map(v → qtm)))
+          case None       => Some(θ + (v → qtm))
           case Some(qtm2) if qtm == qtm2 => Some(θ)
           case _          => None
         }
@@ -224,7 +224,7 @@ object Nets {
         val boundTo = θ.lift(v)
           (for ((next,net2) <- nextArg(net))
           yield boundTo match {
-            case None => matchedArgs(θ.orElse (Map(v → next)), pats, net2)
+            case None => matchedArgs(θ + (v → next), pats, net2)
             case Some(tm) if next == tm => matchedArgs(θ, pats, net2)
             case _ => List()
           }).flatten
