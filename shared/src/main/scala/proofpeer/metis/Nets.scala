@@ -70,10 +70,9 @@ object Nets {
     qtm: Term[Unit,(F,Int)]): Option[QSubst[V,F]] = {
     (tm,qtm) match {
       case (Var(v),qtm) => θ.lift(v) match {
-        case None           =>
-          Some(θ + (v → qtm))
+        case None => Some(θ + (v → qtm))
         case Some(qtm2) if canUnifyQTerms(qtm,qtm2) => Some(θ)
-        case _                                      => None
+        case _ => None
       }
       case (tm,Var(())) => Some(θ)
       case (Fun(f1,fargs),Fun((f2,_),qargs))
