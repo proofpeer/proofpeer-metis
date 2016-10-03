@@ -1,9 +1,9 @@
 package proofpeer.metis.fol.sttzf
 
 import org.ensime.sexp.{ SexpParser, SexpCompactPrinter => SexpPrinter }
-import org.ensime.sexp.{ Sexp, SexpCons, SexpNumber }
+import org.ensime.sexp.{ Sexp, SexpCons, SexpSymbol, SexpNumber }
 
-import proofpeer.metis. { SExpr => _, _ }
+import proofpeer.metis. { SExpr => _, Pred => _, _ }
 import proofpeer.metis.fol._
 
 import FOL.Instances._
@@ -16,19 +16,34 @@ object ZFProver {
       ValidationNel[(Sexp,String),FOL[Sexp,Sexp,Sexp,FOL.Neg,FOL.Binder]] =
     SExpr.folOfSExpr(SexpParser.parse(str),true)
 
-  val extensionality =
-    folOfString("(<-> (= a b) (! x (<-> (vin x A) (vin x B))))")
-  val upair =
-    folOfString("(ex P (! x (<-> (vin x P) (or (= x a) (= y a)))))")
-  val funion =
-    folOfString("(ex U (! x (<-> (vin x P) (or (vin x A) (vin x B)))))")
-  val powerset =
-    folOfString("(ex P (! X (<-> ((vin) X P) (! x (-> ((vin) x X) ((vin) x A))))))")
-  def separation(
-    inst: (Sexp, List[Term[Sexp,Sexp]]) => FOL[Sexp,Sexp,Sexp,FOL.Neg,FOL.Binder]) =
-    folOfString("(ex S (! x (<-> (vin x S) (and (vin x A) (P x)))))").map {
-      fol => FOL.instPred(fol)(inst)
-    }
+  abstract sealed class Axiom {
+    val thm: FOL[Sexp,Sexp,Sexp,FOL.Neg,FOL.Binder]
+  }
+  val extensionality = new Axiom {
+    override val Success(thm) =
+      folOfString("(<-> (= a b) (! x (<-> (vin x A) (vin x B))))")
+  }
+  val upair = new Axiom {
+    override val Success(thm) =
+      folOfString("(ex P (! x (<-> (vin x P) (or (= x a) (= y a)))))")
+  }
+  val fUnion = new Axiom {
+    override val Success(thm) =
+      folOfString("(ex U (! x (<-> (vin x P) (or (vin x A) (vin x B)))))")
+  }
+  val powerset = new Axiom {
+    override val Success(thm) =
+      folOfString("(ex P (! X (<-> ((vin) X P) (! x (-> (vin x X) (vin x A))))))")
+  }
+  val Success(sepScheme) =
+    folOfString("(ex S (! x (<-> (vin x S) (and (vin x A) (P x)))))")
+
+  def separationInst(
+    inst: Term[Sexp,Sexp] => FOL[Sexp,Sexp,Sexp,FOL.Neg,FOL.Binder]) = {
+    (FOL.instPred1(sepScheme) {
+      case (p,x) => if (p === SexpSymbol("P")) inst(x) else Pred(p,List(x))
+    }).map { ax => new Axiom { override val thm = ax }}
+  }
 
   def unfresh(x: FOL.Fresh[Sexp]) = SexpCons(x.origin, SexpNumber(x.get))
 
@@ -64,7 +79,7 @@ object ZFProver {
   }
 
   case class SExprResolution(
-    axioms: List[FOL[Sexp,Sexp,Sexp,FOL.Neg,FOL.Binder]],
+    axioms: List[Axiom],
     lemmas: List[SExprResolution],
     conjecture: FOL[Sexp,Sexp,Sexp,FOL.Neg,FOL.Binder]) {
     implicit val ordFun = ResolutionBasis.ordFun
@@ -72,7 +87,7 @@ object ZFProver {
     val res: Resolution[Sexp,Sexp,Sexp,Int,ResolutionBasis.kernel.type] =
       new Resolution(
         0,
-        (axioms ++ lemmas.map { lemma =>
+        (axioms.map {_.thm} ++ lemmas.map { lemma =>
           lemma.thm.map { _ => lemma.conjecture}.get
         } ++ List(Unary(FOL.Neg(),conjecture))).flatMap { cnfSexp(_).toList },
         ResolutionBasis.ithmF,
@@ -81,5 +96,28 @@ object ZFProver {
       )
     val thms = res.distance_nextThms.takeWhile(_.isDefined).flatten
     lazy val thm = thms.map { _._2}.filter { _.isContradiction }.headOption
+  }
+
+  def sepOfString(sepInst: String) = {
+    val sexp = SexpParser.parse(sepInst)
+    SExpr.lambdaOfSExpr(sexp,true).map {
+      lam => separationInst(lam)
+        .map { _.success }
+        .getOrElse((sexp, "cannot substitute freely").failureNel)
+    }.reassociateLeft
+  }
+
+  def interactive(
+    sepInsts: List[String],
+    axioms: List[Axiom],
+    lemmas: List[SExprResolution],
+    conjecture: String) = {
+    (sepInsts.traverseU { sepOfString(_) } |@|
+      folOfString(conjecture).leftMap(_.success)) {
+        (seps, conjecture) => SExprResolution(
+          (axioms ++ seps),
+          lemmas,
+          Unary(FOL.Neg(),conjecture))
+      }
   }
 }
