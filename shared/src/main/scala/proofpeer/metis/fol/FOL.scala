@@ -16,7 +16,28 @@ import ClauseInstances._
   * @tparam U Type of unary connectives (either Neg or Nothing)
   * @tparam B Type of binders (either Binder or Nothing)
   */
-sealed abstract class FOL[V,F,P,+U,+B]
+sealed abstract class FOL[V,F,P,+U,+B] {
+  def frees[V:Order,F,P,U,B](fol: FOL[V,F,P,U,B]): ISet[V] = fol match {
+    case Pred(p,args) => args.foldMap(_.frees)
+    case And(p,q) => frees(p) |+| frees(q)
+    case Or(p,q) => frees(p) |+| frees(q)
+    case Unary(_,p) => frees(p)
+    case Bnding(_,v,p) => frees(p).delete(v)
+  }
+  def inst(f: V => Term[V,F])(implicit ev: Order[V]) = {
+    def instV(fol: FOL[V,F,P,U,B], bound: ISet[V]): FOL[V,F,P,U,B] = fol match {
+      case Pred(p,args) => Pred(p,args.map { _ >>= {
+        v => if (bound.contains(v)) Var(v) else f(v)
+      }})
+      case And(p,q) => And(instV(p,bound),instV(q,bound))
+      case Or(p,q) => Or(instV(p,bound),instV(q,bound))
+      case Unary(u,p) => Unary(u,instV(p,bound))
+      case Bnding(b,v,p) => Bnding(b,v,instV(p,bound.insert(v)))
+    }
+    instV(this, ∅[ISet[V]])
+  }
+}
+
 case class Pred[V,F,P,U,B](p: P, args: List[Term[V,F]])     extends FOL[V,F,P,U,B]
 case class And[V,F,P,U,B](
   p: FOL[V,F,P,U,B], q: FOL[V,F,P,U,B])                     extends FOL[V,F,P,U,B]
@@ -32,6 +53,27 @@ object FOL {
 
   sealed case class Neg()
 
+  def instPred1[V,F,P,U,B](fol: FOL[V,F,P,U,B])(
+    inst: (P,Term[V,F]) => FOL[V,F,P,U,B])(
+    implicit ev: Order[V]): Option[FOL[V,F,P,U,B]] = {
+    def instP(fol: FOL[V,F,P,U,B], bound: ISet[V]): Option[FOL[V,F,P,U,B]] =
+      fol match {
+        case fm@Pred(p,List(arg)) =>
+          val predFrees = arg.frees
+          val mustAvoid = bound.difference(predFrees)
+          val instantiated = inst(p,arg)
+          if (fol.frees(instantiated).intersection(mustAvoid).isEmpty)
+            Some(instantiated)
+          else None
+        case fm@Pred(_,_)   => Some(fm)
+        case And(p,q)       => (instP(p,bound) |@| instP(q,bound)) { And(_,_) }
+        case Or(p,q)        => (instP(p,bound) |@| instP(q,bound)) { Or(_,_) }
+        case Unary(u,p)     => instP(p,bound).map { Unary(u,_) }
+        case Bnding(b,v,p)  => instP(p,bound.insert(v)).map { Bnding(b,v,_) }
+      }
+    instP(fol, ∅[ISet[V]])
+  }
+
   /** Freshened variables are integers tracking their original. */
   type Fresh[V] = Prov[V,Int]
 
@@ -45,64 +87,6 @@ object FOL {
       case Unary(u,p)    => Unary(u,trimap(p)(f,g,h))
       case Bnding(b,v,p) => Bnding(b,f(v),trimap(p)(f,g,h))
     }
-  }
-
-  def frees[V:Order,F,P,U,B](fol: FOL[V,F,P,U,B]): ISet[V] = fol match {
-    case Pred(p,args) => args.foldMap(_.frees)
-    case And(p,q) => frees(p) |+| frees(q)
-    case Or(p,q) => frees(p) |+| frees(q)
-    case Unary(_,p) => frees(p)
-    case Bnding(_,v,p) => frees(p).delete(v)
-  }
-
-  def inst[V:Order,F,P,U,B](fol: FOL[V,F,P,U,B])(f: V => Term[V,F]) = {
-    def instV(fol: FOL[V,F,P,U,B], bound: ISet[V]): FOL[V,F,P,U,B] = fol match {
-      case Pred(p,args) => Pred(p,args.map { _.subst {
-        v => if (bound.contains(v)) f(v) else Var(v)
-      }})
-      case And(p,q) => And(instV(p,bound)(f),instV(q,bound)(f))
-      case Or(p,q) => Or(instV(p,bound)(f),instV(q,bound)(f))
-      case Unary(u,p) => Unary(u,instV(p,bound)(f))
-      case Bnding(b,v,p) => Unary(u,instV(p,bound.insert(v))(f))
-    }
-  }
-
-  def instPred1[V:Order,F,P,U,B](fol: FOL[V,F,P,U,B])(
-    inst: (P,Term[V,F]) => FOL[V,F,P,U,B]): FOL[V,F,P,U,B] = {
-    def instP(fol: FOL[V,F,P,U,B], bound: ISet[V]): FOL[V,F,P,U,B] =
-      fol match {
-        case fm@Pred(p,List(arg)) =>
-          val predFrees = arg.frees
-          val mustAvoid = bound.difference(predFrees)
-          val instantiated = inst(p,arg)
-          if (frees(instantiated).intersection(mustAvoid).isEmpty)
-            instantiated
-          else fm
-        case And(p,q)       => And(instP(p,bound),instP(q,bound))
-        case Or(p,q)        => Or(instP(p,bound),instP(q,bound))
-        case Unary(u,p)     => Unary(u,instP(p,bound))
-        case Bnding(b,v,p)  => Bnding(b,v,instP(p,bound.insert(v)))
-      }
-    instP(fol, ∅[ISet[V]])
-  }
-
-  def instPred[V:Order,F,P,U,B](fol: FOL[V,F,P,U,B])(
-    inst: (P,List[Term[V,F]]) => FOL[V,F,P,U,B]): FOL[V,F,P,U,B] = {
-    def instP(fol: FOL[V,F,P,U,B], bound: ISet[V]): FOL[V,F,P,U,B] =
-      fol match {
-        case fm@Pred(p,args) =>
-          val predFrees = args.foldMap(_.frees)
-          val mustAvoid = bound.difference(predFrees)
-          val instantiated = inst(p,args)
-          if (frees(instantiated).intersection(mustAvoid).isEmpty)
-            instantiated
-          else fm
-        case And(p,q)       => And(instP(p,bound),instP(q,bound))
-        case Or(p,q)        => Or(instP(p,bound),instP(q,bound))
-        case Unary(u,p)     => Unary(u,instP(p,bound))
-        case Bnding(b,v,p)  => Bnding(b,v,instP(p,bound.insert(v)))
-      }
-    instP(fol, ∅[ISet[V]])
   }
 
   object Instances {
