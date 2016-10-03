@@ -6,6 +6,7 @@ import scalaz._
 import Scalaz._
 
 import proofpeer.metis.Term
+import proofpeer.metis.Var
 import proofpeer.metis.SExpr._
 import FOL._
 import FOL.Instances._
@@ -76,10 +77,12 @@ object SExpr {
       ValidationNel[(Sexp, String),
         Term[Sexp,Sexp] => FOL[Sexp,Sexp,Sexp,FOL.Neg,FOL.Binder]] =
     sexpr match {
-      case SexpList(List(x, body)) =>
+      case SexpList(List(SexpList(List(x)), body)) =>
         folOfSExpr(body,desugar).map {
-          fol => arg:Sexp =>
-          trimap(fol)({ y => if (x === y) arg else y }, f => f, p => p)
+          body => arg:Term[Sexp,Sexp] =>
+          body.inst { v =>
+            if (v === x) arg else Var(v)
+          }
         }
       case _ => (sexpr, "lambda expected").failureNel
   }
