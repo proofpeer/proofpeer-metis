@@ -26,6 +26,7 @@ import scalaz._
 import Scalaz._
 import proofpeer.metis.Clause
 import proofpeer.metis.ClauseInstances._
+import proofpeer.metis.fol.sttzf.Theory._
 """
   )
 lazy val metisJVM = metis.jvm
