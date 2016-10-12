@@ -141,7 +141,7 @@ abstract sealed class Term[V,F]
             else if (otherTerm_.freeIn(v))
               None
             else {
-              val vMapping = Subst.empty[V,Term[V,F]].bind(v,otherTerm_).get
+              val vMapping = Subst(IMap.singleton[V,Term[V,F]](v,otherTerm_))
               val θ2 = θ.mapRhs { _.subst(vMapping) }
               val θ3 = θ2.bind(v,otherTerm_)
               if (θ3.isEmpty)
