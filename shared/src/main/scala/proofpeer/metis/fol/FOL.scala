@@ -328,23 +328,29 @@ object Matrix {
 object CNF {
   import Matrix.Matrix
   import FOL.Neg
-  def cnf_[V:Order,F:Order,P:Order](fol: Matrix[V,F,(Option[Neg],P)]):
-      ISet[ISet[Literal[V,F,P]]] = {
+  def cnf_[V:Order,F:Order,P:Order](
+    fol: Matrix[V,F,(Option[Neg],P)],
+    eqP: P): ISet[ISet[Literal[V,F,P]]] = {
+    def pToPred(p: P, args: List[Term[V,F]]): Atom[V,F,P] =
+      args match {
+        case List(x,y) if p === eqP => Eql(x,y)
+        case _ => MPred(p, args)
+      }
     fol match {
       case Pred((None,p),args)        =>
-        ISet.singleton(ISet.singleton(Literal(true,MPred(p,args))))
+        ISet.singleton(ISet.singleton(Literal(true,pToPred(p,args))))
       case Pred((Some(Neg()),p),args) =>
-        ISet.singleton(ISet.singleton(Literal(false,MPred(p,args))))
-      case And(p,q)                   => cnf_(p) |+| cnf_(q)
+        ISet.singleton(ISet.singleton(Literal(false,pToPred(p,args))))
+      case And(p,q)                   => cnf_(p,eqP) |+| cnf_(q,eqP)
       case Or(p,q)                    =>
-        cnf_(p).foldMap { ps => cnf_(q).map { qs => ps |+| qs } }
+        cnf_(p,eqP).foldMap { ps => cnf_(q,eqP).map { qs => ps |+| qs } }
       case Unary(void,_)              => void
       case Bnding(void,_,_)           => void
     }
   }
 
   /** Convert an implicitly universally quantified matrix into CNF form. */
-  def cnf[V:Order,F:Order,P:Order](fol: Matrix[V,F,(Option[Neg],P)]):
+  def cnf[V:Order,F:Order,P:Order](fol: Matrix[V,F,(Option[Neg],P)], eqP: P):
       ISet[Clause[V,F,P]] =
-    cnf_(fol).map(Clause(_))
+    cnf_(fol,eqP).map(Clause(_))
 }

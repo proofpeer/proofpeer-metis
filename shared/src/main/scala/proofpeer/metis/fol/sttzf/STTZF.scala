@@ -52,7 +52,6 @@ object ZFProver {
     val bnds2 = bnds.map { _.rightMap(unfresh(_)) }
     val mat2 = FOL.trimap(mat)(v => v.fold(v => v, unfresh(_)),f => f,p => p)
     val mat3 = Matrix.skolemize(bnds2, mat2)
-    CNF.cnf(FOL.trimap(mat3)(v => v, _.fold(v => v, f => f), p => p))
   }
 
   object ResolutionBasis {
@@ -96,6 +95,9 @@ object ZFProver {
       )
     val thms = res.distance_nextThms.takeWhile(_.isDefined).flatten
     lazy val thm = thms.map { _._2}.filter { _.isContradiction }.headOption
+    CNF.cnf(
+      FOL.trimap(mat3)(v => v, _.fold(v => v, f => f), p => p),
+      SexpSymbol("="))
   }
 
   def sepOfString(sepInst: String) = {
