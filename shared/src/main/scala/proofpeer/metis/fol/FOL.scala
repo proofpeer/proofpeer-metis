@@ -89,6 +89,23 @@ object FOL {
     }
   }
 
+  def trifoldMap[V:Order,F,P,U,B,M:Monoid](fol: FOL[V,F,P,U,B])(
+    f: V => M, g: F => M, h: P => M): M = {
+    def ffree(bounds: ISet[V], f: V => M, v: V) =
+      if (bounds.member(v)) ∅[M] else f(v)
+    def trifold(bounds: ISet[V], fol: FOL[V,F,P,U,B],
+      f: V => M, g: F => M, h: P => M): M = {
+      fol match {
+        case Pred(p,args) => h(p) |+| args.foldMap(_.bifoldMap(ffree(bounds,f,_))(g))
+        case And(p,q) => trifold(bounds,p,f,g,h) |+| trifold(bounds,q,f,g,h)
+        case Or(p,q) => trifold(bounds,p,f,g,h) |+| trifold(bounds,q,f,g,h)
+        case Unary(_,p) => trifold(bounds,p,f,g,h)
+        case Bnding(_,v,p) => trifold(bounds.insert(v),p,f,g,h)
+      }
+    }
+    trifold(ISet.empty,fol,f,g,h)
+  }
+
   object Instances {
     implicit def FOLIsFunctor[F,P,Un,B]: Functor[({type λ[V] = FOL[V,F,P,Un,B]})#λ] =
     new Functor[({type λ[V] = FOL[V,F,P,Un,B]})#λ] {
