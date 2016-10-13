@@ -17,12 +17,12 @@ import ClauseInstances._
   * @tparam B Type of binders (either Binder or Nothing)
   */
 sealed abstract class FOL[V,F,P,+U,+B] {
-  def frees[V:Order,F,P,U,B](fol: FOL[V,F,P,U,B]): ISet[V] = fol match {
+  def frees(implicit ev: Order[V]): ISet[V] = this match {
     case Pred(p,args) => args.foldMap(_.frees)
-    case And(p,q) => frees(p) |+| frees(q)
-    case Or(p,q) => frees(p) |+| frees(q)
-    case Unary(_,p) => frees(p)
-    case Bnding(_,v,p) => frees(p).delete(v)
+    case And(p,q) => p.frees |+| q.frees
+    case Or(p,q) => p.frees |+| q.frees
+    case Unary(_,p) => p.frees
+    case Bnding(_,v,p) => p.frees.delete(v)
   }
   def inst(f: V => Term[V,F])(implicit ev: Order[V]) = {
     def instV(fol: FOL[V,F,P,U,B], bound: ISet[V]): FOL[V,F,P,U,B] = fol match {
@@ -62,7 +62,7 @@ object FOL {
           val predFrees = arg.frees
           val mustAvoid = bound.difference(predFrees)
           val instantiated = inst(p,arg)
-          if (fol.frees(instantiated).intersection(mustAvoid).isEmpty)
+          if (instantiated.frees.intersection(mustAvoid).isEmpty)
             Some(instantiated)
           else None
         case fm@Pred(_,_)   => Some(fm)
