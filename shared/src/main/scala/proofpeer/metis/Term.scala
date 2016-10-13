@@ -222,6 +222,20 @@ object TermInstances {
     }
   }
 
+  implicit def TermIsBifoldable = new Bifoldable[Term] {
+    override def bifoldMap[V,F,M:Monoid](tm: Term[V,F])(f: V => M)(g: F => M): M =
+      tm match {
+        case Var(v) => f(v)
+        case Fun(fn,args) => g(fn) |+| args.foldMap(bifoldMap(_)(f)(g))
+      }
+    override def bifoldRight[V,F,A](tm: Term[V,F], z: => A)(
+      f: (V, => A) => A)(g: (F, => A) => A): A =
+      tm match {
+        case Var(v) => f(v,z)
+        case Fun(fn,args) => g(fn,args.foldRight(z)(bifoldRight(_,_)(f)(g)))
+      }
+  }
+
   implicit def TermIsShow[V:Show,F:Show] = new Show[Term[V,F]] {
     override def show(tm: Term[V,F]): Cord = {
       tm match {
