@@ -54,12 +54,12 @@ object ZFProver {
   }
   val fUnion = new Theorem {
     override val Success(thm) =
-      folOfString("(ex U (! x (<-> (vin x P) (or (vin x A) (vin x B)))))")
+      folOfString("(ex U (! x (<-> (vin x U) (or (vin x A) (vin x B)))))")
     override val definitions = IMap.empty[Sexp,FOLSexp]
   }
   val powerset = new Theorem {
     override val Success(thm) =
-      folOfString("(ex P (! X (<-> ((vin) X P) (! x (-> (vin x X) (vin x A))))))")
+      folOfString("(ex P (! X (<-> (vin X P) (! x (-> (vin x X) (vin x A))))))")
     override val definitions = IMap.empty[Sexp,FOLSexp]
   }
   val Success(sepScheme) =
