@@ -29,65 +29,65 @@ import org.ensime.sexp.{ SexpCompactPrinter => SexpPrinter }
 
     + positive literals are atoms.
 */
-object SExpr {
-  type SExprFn = String \/ Sexp
-  def functorOfSExpr(sexpr: Sexp): SExprFn = sexpr match {
+object Sexp {
+  type SexpFn = String \/ Sexp
+  def functorOfSexp(sexpr: Sexp): SexpFn = sexpr match {
     case SexpSymbol(sym) => -\/(sym)
     case SexpList(List(SexpList(List(sexpr)))) => \/-(sexpr)
   }
-  def termOfSExpr(sexpr: Sexp): Term[SExprFn, SExprFn] = sexpr match {
-    case SexpList(f :: args) => Fun(functorOfSExpr(f), args.map(termOfSExpr(_)))
-    case _ => Var(functorOfSExpr(sexpr))
+  def termOfSexp(sexpr: Sexp): Term[SexpFn, SexpFn] = sexpr match {
+    case SexpList(f :: args) => Fun(functorOfSexp(f), args.map(termOfSexp(_)))
+    case _ => Var(functorOfSexp(sexpr))
   }
-  def atomOfSExpr(sexpr: Sexp): Atom[SExprFn, SExprFn, SExprFn] = sexpr match {
+  def atomOfSexp(sexpr: Sexp): Atom[SexpFn, SexpFn, SexpFn] = sexpr match {
     case SexpList(List(SexpSymbol("="), l, r)) =>
-      Eql(termOfSExpr(l), termOfSExpr(r))
+      Eql(termOfSexp(l), termOfSexp(r))
     case SexpList(p :: args) =>
-      Pred(functorOfSExpr(p), args.map(termOfSExpr(_)))
+      Pred(functorOfSexp(p), args.map(termOfSexp(_)))
   }
-  def litOfSExpr(sexpr: Sexp): Literal[SExprFn, SExprFn, SExprFn] = sexpr match {
+  def litOfSexp(sexpr: Sexp): Literal[SexpFn, SexpFn, SexpFn] = sexpr match {
     case SexpList(List(SexpSymbol("not"), p)) =>
-      Literal(false,atomOfSExpr(p))
-    case _ => Literal(true, atomOfSExpr(sexpr))
+      Literal(false,atomOfSexp(p))
+    case _ => Literal(true, atomOfSexp(sexpr))
   }
-  def clauseOfSExpr(sexpr: Sexp): Clause[SExprFn, SExprFn, SExprFn] = sexpr match {
-    case SexpList(lits) => Clause(ISet.fromList(lits.map(litOfSExpr(_))))
+  def clauseOfSexp(sexpr: Sexp): Clause[SexpFn, SexpFn, SexpFn] = sexpr match {
+    case SexpList(lits) => Clause(ISet.fromList(lits.map(litOfSexp(_))))
   }
 
-  def SExprOfFn(fn: SExprFn): Sexp = fn match {
+  def SexpOfFn(fn: SexpFn): Sexp = fn match {
     case -\/(fn) => SexpSymbol(fn)
     case \/-(fn) => SexpList(List(SexpList(List(fn))))
   }
-  def SExprOfTerm(tm: Term[SExprFn,SExprFn]): Sexp = tm match {
-    case Var(v) => SExprOfFn(v)
-    case Fun(f,args) => SexpList(SExprOfFn(f) :: args.map(SExprOfTerm(_)))
+  def SexpOfTerm(tm: Term[SexpFn,SexpFn]): Sexp = tm match {
+    case Var(v) => SexpOfFn(v)
+    case Fun(f,args) => SexpList(SexpOfFn(f) :: args.map(SexpOfTerm(_)))
   }
-  def SExprOfAtom(atom: Atom[SExprFn, SExprFn, SExprFn]): Sexp = atom match {
-    case Pred(p,args) => SexpList(SExprOfFn(p) :: args.map(SExprOfTerm(_)))
-    case Eql(l,r) => SexpList(List(SexpSymbol("="), SExprOfTerm(l), SExprOfTerm(r)))
+  def SexpOfAtom(atom: Atom[SexpFn, SexpFn, SexpFn]): Sexp = atom match {
+    case Pred(p,args) => SexpList(SexpOfFn(p) :: args.map(SexpOfTerm(_)))
+    case Eql(l,r) => SexpList(List(SexpSymbol("="), SexpOfTerm(l), SexpOfTerm(r)))
   }
-  def SExprOfLiteral(lit: Literal[SExprFn, SExprFn, SExprFn]): Sexp = lit match {
-    case Literal(true, atom) => SExprOfAtom(atom)
+  def SexpOfLiteral(lit: Literal[SexpFn, SexpFn, SexpFn]): Sexp = lit match {
+    case Literal(true, atom) => SexpOfAtom(atom)
     case Literal(false, atom) =>
-      SexpList(List(SexpSymbol("not"), SExprOfAtom(atom)))
+      SexpList(List(SexpSymbol("not"), SexpOfAtom(atom)))
   }
-  def SExprOfClause(cl: Clause[SExprFn, SExprFn, SExprFn]): Sexp =
-    SexpList(cl.lits.toList.map(SExprOfLiteral(_)))
+  def SexpOfClause(cl: Clause[SexpFn, SexpFn, SexpFn]): Sexp =
+    SexpList(cl.lits.toList.map(SexpOfLiteral(_)))
 
-  trait FOLSExprPrinter extends Printer[SExprFn,SExprFn,SExprFn] {
-    override def printV(v: SExprFn) =
-      Cord(SexpPrinter(SExprOfFn(v)))
-    override def printF(f: SExprFn) =
-      Cord(SexpPrinter(SExprOfFn(f)))
-    override def printP(p: SExprFn) =
-      Cord(SexpPrinter(SExprOfFn(p)))
-    override def printTerm(tm: Term[SExprFn,SExprFn]) =
-      Cord(SexpPrinter(SExprOfTerm(tm)))
-    override def printAtom(atm: Atom[SExprFn,SExprFn,SExprFn]) =
-      Cord(SexpPrinter(SExprOfAtom(atm)))
-    override def printLiteral(lit: Literal[SExprFn,SExprFn,SExprFn]) =
-      Cord(SexpPrinter(SExprOfLiteral(lit)))
-    override def printClause(cl: Clause[SExprFn,SExprFn,SExprFn]) =
-      Cord(SexpPrinter(SExprOfClause(cl)))
+  trait FOLSexpPrinter extends Printer[SexpFn,SexpFn,SexpFn] {
+    override def printV(v: SexpFn) =
+      Cord(SexpPrinter(SexpOfFn(v)))
+    override def printF(f: SexpFn) =
+      Cord(SexpPrinter(SexpOfFn(f)))
+    override def printP(p: SexpFn) =
+      Cord(SexpPrinter(SexpOfFn(p)))
+    override def printTerm(tm: Term[SexpFn,SexpFn]) =
+      Cord(SexpPrinter(SexpOfTerm(tm)))
+    override def printAtom(atm: Atom[SexpFn,SexpFn,SexpFn]) =
+      Cord(SexpPrinter(SexpOfAtom(atm)))
+    override def printLiteral(lit: Literal[SexpFn,SexpFn,SexpFn]) =
+      Cord(SexpPrinter(SexpOfLiteral(lit)))
+    override def printClause(cl: Clause[SexpFn,SexpFn,SexpFn]) =
+      Cord(SexpPrinter(SexpOfClause(cl)))
   }
 }
