@@ -6,7 +6,7 @@ import org.ensime.sexp.{ SexpParser, Sexp, SexpSymbol,
 import scalaz._
 import Scalaz._
 
-import proofpeer.metis.Sexp.{ SexpFn  }
+import proofpeer.metis.Sexp.{ SexpFn, functorOfString }
 import proofpeer.metis.fol.{ Sexp, FOL  }
 import proofpeer.metis.fol.Sexp.SexpOfFol
 
@@ -15,7 +15,7 @@ import ZFProver._
 object Interactive {
   def sepOfString(x: String, sepBody: String): Theorem = {
     val body = folOfString(sepBody)
-    separationInst(x.left[Sexp], body)
+    separationInst(functorOfString(x), body)
   }
 
   def folFrees(fol: FOLSexpFn): (ISet[SexpFn], ISet[SexpFn], ISet[SexpFn]) =
@@ -38,8 +38,8 @@ object Interactive {
        System.out.println("Note: " + v + " is free.")
      }
      val lhss = lemmas.foldMap(_.definitions.keySet)
-       .insert("=".left[Sexp])
-       .insert("vin".left[Sexp])
+       .insert(functorOfString("="))
+       .insert(functorOfString("vin"))
      fs.toList.foreach { f =>
        if (!lhss.member(f))
          System.out.println("Note: " + f + " is undefined")

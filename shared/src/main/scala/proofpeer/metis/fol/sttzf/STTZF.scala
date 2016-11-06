@@ -4,7 +4,8 @@ import org.ensime.sexp.SexpParser
 import org.ensime.sexp.{ Sexp, SexpCons, SexpSymbol, SexpNumber,
   SexpCompactPrinter => SexpPrinter }
 
-import proofpeer.metis.Sexp. { SexpFn, SexpOfFn, functorOfSexp, FOLSexpPrinter }
+import proofpeer.metis.Sexp. { SexpFn, SexpOfFn, functorOfSexp, functorOfString,
+  FOLSexpPrinter }
 import proofpeer.metis. { Sexp => _, Pred => _, _ }
 import proofpeer.metis.fol._
 import proofpeer.metis.fol.Sexp._
@@ -54,20 +55,20 @@ object ZFProver {
     override val definitions = theorem.definitions
   }
   def separationInst(x: SexpFn, body: FOLSexpFn): Theorem = {
-    val s = -\/("Sub")
+    val s = functorOfString("Sub")
     def v(fn: SexpFn): Term[SexpFn,SexpFn] = Var[SexpFn,SexpFn](fn)
     val avoids = body.frees.insert(x)
     if (avoids.contains(s))
       throw new RuntimeException("Sub cannot be free in body")
     else {
-      val l = Pred(-\/("vin"):SexpFn,List(v(x),v(s)))
+      val l = Pred(functorOfString("vin"),List(v(x),v(s)))
       val r =
-        And(Pred(-\/("vin"):SexpFn,List(v(x),v(-\/("Super")))),
+        And(Pred(functorOfString("vin"),List(v(x),v(functorOfString("Super")))),
           body)
       val ax =
         Bnding(
           FOL.Exists,
-          -\/("Sub"),
+          functorOfString("Sub"),
           Bnding(
             FOL.All,
             x,
@@ -138,7 +139,7 @@ object ZFProver {
   def cnfSexp(fol: FOLSexpFn) = {
     val (bnds,mat,_) = Matrix.quantPull(FOL.toNNF(fol))
     val mat2 = Matrix.skolemize(bnds, mat)
-    CNF.cnf(mat2,-\/("="))
+    CNF.cnf(mat2,functorOfString("="))
   }
 
   val icl = new IdentClause[
@@ -192,7 +193,7 @@ object ZFProver {
 
   def define(theorem: Theorem, name: String): Option[Theorem] = {
     val fol = theorem.thm
-    val nameSym : SexpFn = name.left[Sexp]
+    val nameSym : SexpFn = functorOfString(name)
     def strip(args: List[Term[SexpFn,SexpFn]])(fol: FOLSexpFn):
         Option[(SexpFn, FOLSexpFn)] =
       fol match {

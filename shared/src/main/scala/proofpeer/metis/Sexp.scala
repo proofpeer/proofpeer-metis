@@ -31,8 +31,9 @@ import org.ensime.sexp.{ SexpCompactPrinter => SexpPrinter }
 */
 object Sexp {
   type SexpFn = String \/ Sexp
+  def functorOfString(str: String): SexpFn = -\/(str)
   def functorOfSexp(sexpr: Sexp): SexpFn = sexpr match {
-    case SexpSymbol(sym) => -\/(sym)
+    case SexpSymbol(sym) => functorOfString(sym)
     case SexpList(List(SexpList(List(sexpr)))) => \/-(sexpr)
   }
   def termOfSexp(sexpr: Sexp): Term[SexpFn, SexpFn] = sexpr match {

@@ -64,7 +64,7 @@ object Sexp {
         And(folOfImplies(psexp, qsexp), folOfImplies(qsexp, psexp))
       case sexp =>
         atomOfSexp(sexpr) match {
-          case Eql(x,y) => Pred(-\/("="),List(x,y))
+          case Eql(x,y) => Pred(functorOfString("="),List(x,y))
           case APred(p,args) => Pred(p,args)
         }
     }
