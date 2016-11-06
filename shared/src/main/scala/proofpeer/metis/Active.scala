@@ -16,7 +16,8 @@ case class ActiveFactory[
   ITF<:IThmFactory[V,F,P,FV,K]](
   ithmF: ITF,
   litOrder: LiteralOrdering[V,F,P],
-  subsumer: Subsuming[V,F,P,Int]) {
+  subsumer: Subsuming[V,F,P,Int],
+  printer: Printer[V,F,P]) {
 
   import ClauseInstances._
 

@@ -12,18 +12,21 @@ import Scalaz._
   * @tparam P The alphabet from which predicate names are drawn
   * @param  seed Seed for randomly generating finite interpretations
   * @param  initClauses The axioms of the problem to be shown contradictory
+  * @param  printer for debugging
   */
 case class Resolution[V:Order,F:Order,P:Order,FV,K <: Kernel[V,F,P]](
   seed: Long,
   initClauses: List[Clause[V,F,P]],
   ithmF: IThmFactory[V,F,P,FV,K],
-  interpret: Interpretation[V,F,P])
+  interpret: Interpretation[V,F,P],
+  printer: Printer[V,F,P])
   (implicit ordFun: Order[Fun[V,F]], termOrd: PartialOrder[Term[V,F]]){
 
   val activeF = new ActiveFactory[V,F,P,FV,K,ithmF.type](
     ithmF,
     ithmF.litOrder,
-    new Subsuming[V,F,P,Int]
+    new Subsuming[V,F,P,Int],
+    printer
   )
   private val active = new activeF.Active
 
