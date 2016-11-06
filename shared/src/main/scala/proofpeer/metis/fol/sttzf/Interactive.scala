@@ -33,13 +33,15 @@ object Interactive {
      fdefns: List[SexpFn ==>> FOLSexpFn]) = {
 
      val theConjecture = folOfString(conjecture)
-     val (vs,fs,_) = folFrees(theConjecture)
+     val vs = theConjecture.frees
+     val (_,fs,_) = folFrees(theConjecture)
      vs.toList.foreach { v =>
        System.out.println("Note: " + v + " is free.")
      }
      val lhss = lemmas.foldMap(_.definitions.keySet)
        .insert(functorOfString("="))
        .insert(functorOfString("vin"))
+       .insert(functorOfString("member"))
      fs.toList.foreach { f =>
        if (!lhss.member(f))
          System.out.println("Note: " + f + " is undefined")
