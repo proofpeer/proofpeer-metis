@@ -27,27 +27,27 @@ object ZFProver {
   }
   val choice = new Theorem {
     override val thm =
-      folOfString("(-> (vin x A) (vin ((Member) A) A))")
+      folOfString("(-> (vin X A) (vin (member A) A))")
     override val definitions = IMap.empty[SexpFn,FOLSexpFn]
   }
   val extensionality = new Theorem {
     override val thm =
-      folOfString("(<-> (= A B) (! x (<-> (vin x A) (vin x B))))")
+      folOfString("(<-> (= A B) (! X (<-> (vin X A) (vin X B))))")
     override val definitions = IMap.empty[SexpFn,FOLSexpFn]
   }
   val upair = new Theorem {
     override val thm =
-      folOfString("(ex P (! x (<-> (vin x P) (or (= x a) (= x b)))))")
+      folOfString("(ex P (! X (<-> (vin X P) (or (= X A) (= X B)))))")
     override val definitions = IMap.empty[SexpFn,FOLSexpFn]
   }
   val fUnion = new Theorem {
     override val thm =
-      folOfString("(ex U (! x (<-> (vin x U) (or (vin x A) (vin x B)))))")
+      folOfString("(ex U (! X (<-> (vin X U) (or (vin X A) (vin X B)))))")
     override val definitions = IMap.empty[SexpFn,FOLSexpFn]
   }
   val powerset = new Theorem {
     override val thm =
-      folOfString("(ex P (! X (<-> (vin X P) (! x (-> (vin x X) (vin x A))))))")
+      folOfString("(ex P (! S (<-> (vin X P) (! X (-> (vin X S) (vin X A))))))")
     override val definitions = IMap.empty[SexpFn,FOLSexpFn]
   }
   def inst(theorem: Theorem, f: SexpFn ==>> Term[SexpFn,SexpFn]) = new Theorem {
@@ -106,15 +106,16 @@ object ZFProver {
     def tptpOfSexpFn(sym: SexpFn): Option[Cord] =
       if (sym.forall(_.isLetter)) Some(sym) else None
 
-    def tptpOfVAux(v: \/[SexpFn,Fresh[SexpFn]]): Option[Cord] =
+    def tptpOfVAux(v: \/[SexpFn,Fresh[SexpFn]]): Option[Cord] = {
       (v match {
         case -\/(sym) => tptpOfSexpFn(sym)
         case \/-(fsym) => tptpOfSexpFn(fsym.origin).map { _ ++ fsym.get.show }
       })
+    }
 
     override def tptpOfF(v: \/[Fresh[SexpFn],SexpFn]): Option[Cord] =
       (v match {
-        case -\/(fsym) => tptpOfSexpFn(fsym.origin).map { _ ++ fsym.get.show }
+        case -\/(fsym) => tptpOfSexpFn(fsym.origin).map { _ |+| fsym.get.show }
         case \/-(sym) => tptpOfSexpFn(sym)
       })
     override def tptpOfP(p: SexpFn): Option[Cord] = tptpOfSexpFn(p)
@@ -176,9 +177,11 @@ object ZFProver {
           }
         }
       override def toTPTP = {
+
         resolution
           .initClauses
           .zipWithIndex.map { case (cl,i) =>
+            System.out.println(cl)
             Cord("cnf(ax") |+| i.show |+|
             Cord(",axiom,") |+|
             SexpTPTPPrinter.tptpOfClause(
