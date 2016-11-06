@@ -19,7 +19,7 @@ lazy val metis = crossProject.in(file(".")).
     initialCommands in console := """
 import proofpeer.metis.fol.sttzf.ZFProver._
 import org.ensime.sexp.{ SexpCompactPrinter => SexpPrinter }
-import proofpeer.metis.fol.SExpr.{ SExprOfFol }
+import proofpeer.metis.fol.Sexp.{ SexpOfFol }
 import proofpeer.metis.fol._
 import org.ensime.sexp._
 import scalaz._
