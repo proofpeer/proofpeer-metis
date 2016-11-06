@@ -74,12 +74,16 @@ object FOL {
     f: V => V_, g: F => F_, h: P => P_): FOL[V_,F_,P_,U,Nothing] = {
     tritraverse[Id,V,F,P,V_,F_,P_,U](fol)(f,g,h)
   }
-  def trifoldMap[V:Order,F,P,U,M:Monoid](fol: FOL[V,F,P,U,Nothing])(
-    f: V => M, g: F => M, h: P => M): M = {
-    def f_(x:V): Const[M,Nothing] = Const(f(x))
-    def g_(x:F): Const[M,Nothing] = Const(g(x))
-    def h_(x:P): Const[M,Nothing] = Const(h(x))
-    tritraverse[Const[M,?],V,F,P,Nothing,Nothing,Nothing,U](fol)(f_,g_,h_).getConst
+
+  /** All FOL terms are foldable in their (syntactic) functors. */
+  def trifoldMap[V:Order,F,P,U,B,M:Monoid](fol: FOL[V,F,P,U,B])(
+    f: V => M, g: F => M, h: P => M): M =
+    fol match {
+      case Pred(p,args) => h(p) |+| args.foldMap { _.bifoldMap(f)(g) }
+      case And(p,q) => trifoldMap(p)(f,g,h) |+| trifoldMap(q)(f,g,h)
+      case Or(p,q) => trifoldMap(p)(f,g,h) |+| trifoldMap(q)(f,g,h)
+      case Unary(_,p) => trifoldMap(p)(f,g,h)
+      case Bnding(_,v,p) => f(v) |+| trifoldMap(p)(f,g,h)
   }
 
   object Instances {
@@ -131,7 +135,7 @@ object FOL {
             case (Bnding(_,_,_), _) => Ordering.LT
             case (_, Bnding(_,_,_)) => Ordering.GT
           }
-    }
+      }
 
     implicit def NegIsShow = new Show[Neg] {
       override def show(neg: Neg) = Cord("~")
