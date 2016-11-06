@@ -23,12 +23,12 @@ trait TPTPPrinter[V,F,P] extends DefaultPrinter[V,F,P] {
   def isVarId(sym:Cord) = {
     val str = sym.toString
     (str.length > 0 && str.charAt(0).isUpper
-      && str.forall(c => isLetter(c)))
+      && str.forall(c => isLetter(c) || isDigit(c)))
   }
   def isFnId(sym:Cord) = {
     val str = sym.toString
     (str.length > 0 && str.charAt(0).isLower
-      && str.forall(c => isLetter(c)))
+      && str.forall(c => isLetter(c) || isDigit(c)))
   }
 
   val vmap = new Identified[V]
@@ -36,10 +36,22 @@ trait TPTPPrinter[V,F,P] extends DefaultPrinter[V,F,P] {
   val pmap = new Identified[P]
 
   def printV(v: V): Cord =
-    tptpOfV(v).filter(isVarId(_)).getOrElse { Cord("I_") |+| vmap.getIndex(v).show }
+    (tptpOfV(v) >>= { v =>
+      if (isVarId(v))
+        Some(v)
+      else if (isFnId(v))
+        Some(Cord("V_") |+| v)
+      else None
+    }).getOrElse { Cord("I_") |+| vmap.getIndex(v).show }
 
   def printF(f: F): Cord =
-    tptpOfF(f).filter(isFnId(_)).getOrElse { Cord("i_") |+| fmap.getIndex(f).show }
+    (tptpOfF(f) >>= { f =>
+      if (isFnId(f))
+        Some(f)
+      else if (isVarId(f))
+        Some(Cord("f_") |+| f)
+      else None
+    }).getOrElse { Cord("i_") |+| fmap.getIndex(f).show }
 
   def printP(p: P): Cord =
     tptpOfP(p).filter(isFnId(_)).getOrElse { Cord("i_") |+| pmap.getIndex(p).show }
