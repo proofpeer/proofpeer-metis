@@ -1,178 +1,218 @@
 package proofpeer.metis.fol.sttzf
 
-import org.ensime.sexp.{ SexpParser, SexpCompactPrinter => SexpPrinter }
-import org.ensime.sexp.{ Sexp, SexpCons, SexpSymbol, SexpNumber }
+import org.ensime.sexp.SexpParser
+import org.ensime.sexp.{ Sexp, SexpCons, SexpSymbol, SexpNumber,
+  SexpCompactPrinter => SexpPrinter }
 
+import proofpeer.metis.SExpr. { SExprFn, SExprOfFn, functorOfSExpr, FOLSExprPrinter }
 import proofpeer.metis. { SExpr => _, Pred => _, _ }
 import proofpeer.metis.fol._
+import proofpeer.metis.fol.SExpr._
 
-import FOL.Instances._
+import proofpeer.metis.fol.FOL.Instances._
 
 import scalaz._
 import Scalaz._
 
 object ZFProver {
-  type FOLSexp = FOL[Sexp,Sexp,Sexp,FOL.Neg,FOL.Binder]
+  type FOLSExprFn = FOL[SExprFn,SExprFn,SExprFn,FOL.Neg,FOL.Binder]
 
-  def folOfString(str: String):
-      ValidationNel[(Sexp,String),FOLSexp] =
-    SExpr.folOfSExpr(SexpParser.parse(str),true)
-
-  object ResolutionBasis {
-    implicit val ordFun = KnuthBendix.precedenceOrder[Sexp,Sexp]
-    implicit val kbo = KnuthBendix.kbo[Sexp,Sexp]
-    val kernel = new Kernel[Sexp, Sexp, Sexp]
-    val factor = new Factor[Sexp, Sexp, Sexp]
-    val litOrd = new MetisLiteralOrdering(kbo)
-    val fin    = FinOrd(8)
-    val vals   = Valuations[Sexp](fin)
-    val interpretation = Interpretation[Sexp,Sexp,Sexp](1000,vals)
-    val ithmF  = new IThmFactory[Sexp,Sexp,Sexp,Int,kernel.type](
-      kernel,
-      0,
-      { case (n,v) => (n+1,SexpCons(v,SexpNumber(n))) },
-      litOrd,
-      factor)
-  }
+  def folOfString(str: String): FOLSExprFn =
+    folOfSExpr(SexpParser.parse(str),true)
 
   abstract sealed class Theorem {
-    val definitions: Sexp ==>> FOLSexp
-    val thm: FOLSexp
+    val definitions: SExprFn ==>> FOLSExprFn
+    val thm: FOLSExprFn
   }
-  abstract class ResTheorem extends Theorem {
-    val resolution: Resolution[Sexp,Sexp,Sexp,Int,ResolutionBasis.kernel.type] 
+  val choice = new Theorem {
+    override val thm =
+      folOfString("(-> (vin x A) (vin ((Member) A) A))")
+    override val definitions = IMap.empty[SExprFn,FOLSExprFn]
   }
   val extensionality = new Theorem {
-    override val Success(thm) =
+    override val thm =
       folOfString("(<-> (= A B) (! x (<-> (vin x A) (vin x B))))")
-    override val definitions = IMap.empty[Sexp,FOLSexp]
+    override val definitions = IMap.empty[SExprFn,FOLSExprFn]
   }
   val upair = new Theorem {
-    override val Success(thm) =
+    override val thm =
       folOfString("(ex P (! x (<-> (vin x P) (or (= x a) (= x b)))))")
-    override val definitions = IMap.empty[Sexp,FOLSexp]
+    override val definitions = IMap.empty[SExprFn,FOLSExprFn]
   }
   val fUnion = new Theorem {
-    override val Success(thm) =
+    override val thm =
       folOfString("(ex U (! x (<-> (vin x U) (or (vin x A) (vin x B)))))")
-    override val definitions = IMap.empty[Sexp,FOLSexp]
+    override val definitions = IMap.empty[SExprFn,FOLSExprFn]
   }
   val powerset = new Theorem {
-    override val Success(thm) =
+    override val thm =
       folOfString("(ex P (! X (<-> (vin X P) (! x (-> (vin x X) (vin x A))))))")
-    override val definitions = IMap.empty[Sexp,FOLSexp]
+    override val definitions = IMap.empty[SExprFn,FOLSExprFn]
   }
-  val Success(sepScheme) =
-    folOfString("(ex S (! x (<-> (vin x S) (and (vin x A) (P x)))))")
-  def separationInst(
-    inst: Term[Sexp,Sexp] => FOLSexp) = {
-    (FOL.instPred1(sepScheme) {
-      case (p,x) => if (p === SexpSymbol("P")) inst(x) else Pred(p,List(x))
-    }).map { ax => new Theorem {
-      override val thm = ax
-      override val definitions = IMap.empty[Sexp,FOLSexp]
-    }}
+  def inst(theorem: Theorem, f: SExprFn ==>> Term[SExprFn,SExprFn]) = new Theorem {
+    override val thm = theorem.thm.inst(v => f.lookup(v).getOrElse(Var(v)))
+    override val definitions = theorem.definitions
   }
-  def combineDefinitions(defnss: List[IMap[Sexp,FOLSexp]]):
-      ValidationNel[Sexp,IMap[Sexp,FOLSexp]] = {
-    defnss.foldLeft(IMap.empty[Sexp,ISet[FOLSexp]]) {
+  def separationInst(x: SExprFn, body: FOLSExprFn): Theorem = {
+    val s = -\/("Sub")
+    def v(fn: SExprFn): Term[SExprFn,SExprFn] = Var[SExprFn,SExprFn](fn)
+    val avoids = body.frees.insert(x)
+    if (avoids.contains(s))
+      throw new RuntimeException("Sub cannot be free in body")
+    else {
+      val l = Pred(-\/("vin"):SExprFn,List(v(x),v(s)))
+      val r =
+        And(Pred(-\/("vin"):SExprFn,List(v(x),v(-\/("Super")))),
+          body)
+      val ax =
+        Bnding(
+          FOL.Exists,
+          -\/("Sub"),
+          Bnding(
+            FOL.All,
+            x,
+            And(folOfImplies(l,r), folOfImplies(r,l))))
+      new Theorem {
+        override val thm = ax
+        override val definitions = IMap.empty[SExprFn,FOLSExprFn]
+      }}
+    }
+  def combineDefinitions(defnss: List[IMap[SExprFn,FOLSExprFn]]) = {
+    defnss.foldLeft(IMap.empty[SExprFn,ISet[FOLSExprFn]]) {
       case (defn1, defn2) =>
         IMap.mergeWithKey(defn1,defn2) {
           case (_,rhss,rhs) => Some(rhss.insert(rhs))
-        }(_ => IMap.empty[Sexp,ISet[FOLSexp]], _ => IMap.empty[Sexp,ISet[FOLSexp]])
-    }.traverseWithKey[({type G[A] = ValidationNel[Sexp,A]})#G,FOLSexp] {
+        }(m => m, _.map { ISet.singleton(_) })
+    }.mapWithKey {
       case (lhs,rhss) =>
-        if (rhss.size > 1)
-          lhs.failureNel
-        else rhss.elems.head.success
+        rhss.findMax match {
+          case None =>
+            throw new RuntimeException("Conflicting definitions for " + lhs)
+          case Some(rhs) => rhs
+        }
       }
   }
 
-  def sexpPrinter = new DefaultPrinter[Sexp,Sexp,Sexp] {
-    def printV(v: Sexp) = Cord(SexpPrinter(v))
-    def printF(f: Sexp) = Cord(SexpPrinter(f))
-    def printP(p: Sexp) = Cord(SexpPrinter(p))
+  import FOL.Fresh
+  trait SExprTPTPPrinter[V] extends TPTPPrinter[
+    V,
+    \/[Fresh[SExprFn],SExprFn],
+    SExprFn] {
+
+    override def orderF = implicitly[Order[\/[Fresh[SExprFn],SExprFn]]]
+    override def orderP = implicitly[Order[SExprFn]]
+
+    def tptpOfSExprFn(sym: SExprFn): Option[Cord] = sym match {
+      case -\/(sym) if sym.forall(_.isLetter) => Some(sym)
+      case _ => None
+    }
+
+    def tptpOfVAux(v: \/[SExprFn,Fresh[SExprFn]]): Option[Cord] =
+      (v match {
+        case -\/(sym) => tptpOfSExprFn(sym)
+        case \/-(fsym) => tptpOfSExprFn(fsym.origin).map { _ ++ fsym.get.show }
+      })
+
+    override def tptpOfF(v: \/[Fresh[SExprFn],SExprFn]): Option[Cord] =
+      (v match {
+        case -\/(fsym) => tptpOfSExprFn(fsym.origin).map { _ ++ fsym.get.show }
+        case \/-(sym) => tptpOfSExprFn(sym)
+      })
+    override def tptpOfP(p: SExprFn): Option[Cord] = tptpOfSExprFn(p)
+  }
+
+  def SExprTPTPPrinter = new SExprTPTPPrinter[\/[SExprFn,Fresh[SExprFn]]] {
+    override def orderV = implicitly[Order[\/[SExprFn,Fresh[SExprFn]]]]
+    override def tptpOfV(v: \/[SExprFn,Fresh[SExprFn]]): Option[Cord] =
+      tptpOfVAux(v)
+  }
+
+  def SExprResTPTPPrinter = new SExprTPTPPrinter[(\/[SExprFn,Fresh[SExprFn]],Int)] {
+    override def orderV = implicitly[Order[(\/[SExprFn,Fresh[SExprFn]],Int)]]
+    override def tptpOfV(v: (\/[SExprFn,Fresh[SExprFn]],Int)): Option[Cord] = {
+      val (v_,idx) = v
+      super.tptpOfVAux(v_).map { _ |+| "_" |+| idx.show }
+    }
+  }
+
+  def cnfSExpr(fol: FOLSExprFn) = {
+    val (bnds,mat,_) = Matrix.quantPull(FOL.toNNF(fol))
+    val mat2 = Matrix.skolemize(bnds, mat)
+    CNF.cnf(mat2,-\/("="))
+  }
+
+  val icl = new IdentClause[
+    \/[SExprFn,Fresh[SExprFn]],
+    \/[Fresh[SExprFn],SExprFn],
+    SExprFn]
+  abstract class TheoremProof {
+    val conjecture: FOLSExprFn
+    val resolution: Resolution[
+      (icl.Id,icl.Id),
+      icl.Id,
+      icl.Id,
+      icl.Id,
+      icl.ResolutionBasis.kernel.type]
+    def thm: Option[Theorem]
+    def toTPTP: List[Cord]
   }
 
   def prove(
-    conjecture: FOLSexp,
-    lemmas: List[Theorem]): ValidationNel[Sexp,Option[ResTheorem]] = {
-    combineDefinitions(lemmas.map(_.definitions)).map { defns =>
-      implicit val ordFun = ResolutionBasis.ordFun
-      implicit val kbo = ResolutionBasis.kbo
-      val res: Resolution[Sexp,Sexp,Sexp,Int,ResolutionBasis.kernel.type] =
-        new Resolution(
-          0,
-          (lemmas.map { _.thm } ++
-            List(Unary(FOL.Neg(),conjecture))).flatMap { cnfSexp(_).toList },
-          ResolutionBasis.ithmF,
-          ResolutionBasis.interpretation,
-          sexpPrinter)
-      val thms = res.distance_nextThms.takeWhile(_.isDefined).flatten
-      thms.map { _._2 }.filter { _.isContradiction }.headOption.map {
-        _ => new ResTheorem {
-          override val thm = conjecture
-          override val definitions = defns
-          override val resolution = res
+    theConjecture: FOLSExprFn,
+    lemmas: List[Theorem],
+    defns: List[SExprFn ==>> FOLSExprFn]): TheoremProof = {
+    val all_defns = combineDefinitions(lemmas.map(_.definitions) ++ defns)
+    new TheoremProof {
+      val conjecture = theConjecture
+      val resolution = icl.resolution(
+        (lemmas.map { _.thm } ++
+          List(Unary(FOL.Neg(),conjecture))).flatMap { cnfSExpr(_).toList },
+        SExprResTPTPPrinter)
+      val thms = resolution.distance_nextThms.takeWhile(_.isDefined).flatten
+      def thm =
+        thms.map { _._2 }.filter { _.isContradiction }.headOption.map { _ =>
+          new Theorem {
+            override val thm = conjecture
+            override val definitions = all_defns
+          }
+        }
+      override def toTPTP = {
+        resolution
+          .initClauses
+          .zipWithIndex.map { case (cl,i) =>
+            Cord("cnf(ax") |+| i.show |+|
+            Cord(",axiom,") |+|
+            SExprTPTPPrinter.tptpOfClause(
+              icl.fromIdentClause(Clause.trimap(cl)(_._1, i => i, i => i))) |+|
+            Cord(").")
         }
       }
     }
   }
 
-  def define(theorem: Theorem): Option[Theorem] = {
+  def define(theorem: Theorem, name: String): Option[Theorem] = {
     val fol = theorem.thm
-    def strip(args: List[Term[Sexp,Sexp]])(fol: FOLSexp): Option[(Sexp, FOLSexp)] =
+    val nameSym : SExprFn = name.left[Sexp]
+    def strip(args: List[Term[SExprFn,SExprFn]])(fol: FOLSExprFn):
+        Option[(SExprFn, FOLSExprFn)] =
       fol match {
         case Bnding(FOL.Exists, f, body) =>
           val args2 = args.reverse
           (f,body.inst {
             case f2 =>
               if (f === f2)
-                Fun(f,args2)
+                Fun(nameSym,args2)
               else Var(f2)
           }).some
-        case Bnding(FOL.All, v, p) => strip(Var[Sexp,Sexp](v)::args)(p)
+        case Bnding(FOL.All, v, p) => strip(Var[SExprFn,SExprFn](v)::args)(p)
         case _ => None
       }
-    strip(List())(theorem.thm).map {
+    strip(List())(fol).map {
       case (f, body) =>
         new Theorem {
-          val definitions = IMap.singleton(f,body)
+          val definitions = IMap.singleton(nameSym,body)
           val thm = body
         }
     }
-  }
-
-  def unfresh(x: FOL.Fresh[Sexp]) = SexpCons(x.origin, SexpNumber(x.get))
-
-  def cnfSexp(fol: FOLSexp) = {
-    val (bnds,mat,_) = Matrix.quantPull(FOL.toNNF(fol))
-    val bnds2 = bnds.map { _.rightMap(unfresh(_)) }
-    val mat2 = FOL.trimap(mat)(v => v.fold(v => v, unfresh(_)),f => f,p => p)
-    val mat3 = Matrix.skolemize(bnds2, mat2)
-    CNF.cnf(
-      FOL.trimap(mat3)(v => v, _.fold(v => v, f => f), p => p),
-      SexpSymbol("="))
-  }
-
-  def sepOfString(sepInst: String) = {
-    val sexp = SexpParser.parse(sepInst)
-    SExpr.lambdaOfSExpr(sexp,true).map {
-      lam => separationInst(lam)
-        .map { _.success }
-        .getOrElse((sexp, "cannot substitute freely").failureNel)
-    }.reassociateLeft
-  }
-
-  def interactive(
-    conjecture: String,
-    sepInsts: List[String],
-    lemmas: List[Theorem]) = {
-    (sepInsts.traverseU { sepOfString(_) } |@|
-      folOfString(conjecture).leftMap(_.success)) {
-        (seps, conjecture) => prove(
-          conjecture,
-          lemmas ++ seps)
-      }.reassociateLeft
   }
 }

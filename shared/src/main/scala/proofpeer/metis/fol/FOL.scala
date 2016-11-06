@@ -24,6 +24,8 @@ sealed abstract class FOL[V,F,P,+U,+B] {
     case Unary(_,p) => p.frees
     case Bnding(_,v,p) => p.frees.delete(v)
   }
+
+  /** Instantiation. */
   def inst(f: V => Term[V,F])(implicit ev: Order[V]) = {
     def instV(fol: FOL[V,F,P,U,B], bound: ISet[V]): FOL[V,F,P,U,B] = fol match {
       case Pred(p,args) => Pred(p,args.map { _ >>= {
@@ -53,57 +55,31 @@ object FOL {
 
   sealed case class Neg()
 
-  def instPred1[V,F,P,U,B](fol: FOL[V,F,P,U,B])(
-    inst: (P,Term[V,F]) => FOL[V,F,P,U,B])(
-    implicit ev: Order[V]): Option[FOL[V,F,P,U,B]] = {
-    def instP(fol: FOL[V,F,P,U,B], bound: ISet[V]): Option[FOL[V,F,P,U,B]] =
-      fol match {
-        case fm@Pred(p,List(arg)) =>
-          val predFrees = arg.frees
-          val mustAvoid = bound.difference(predFrees)
-          val instantiated = inst(p,arg)
-          if (instantiated.frees.intersection(mustAvoid).isEmpty)
-            Some(instantiated)
-          else None
-        case fm@Pred(_,_)   => Some(fm)
-        case And(p,q)       => (instP(p,bound) |@| instP(q,bound)) { And(_,_) }
-        case Or(p,q)        => (instP(p,bound) |@| instP(q,bound)) { Or(_,_) }
-        case Unary(u,p)     => instP(p,bound).map { Unary(u,_) }
-        case Bnding(b,v,p)  => instP(p,bound.insert(v)).map { Bnding(b,v,_) }
-      }
-    instP(fol, ∅[ISet[V]])
-  }
-
   /** Freshened variables are integers tracking their original. */
   type Fresh[V] = Prov[V,Int]
 
-  /** FOL terms are functors in their (syntactic) functors. */
-  def trimap[V,F,P,V_,F_,P_,U,B](fol: FOL[V,F,P,U,B])(
-    f: V => V_, g: F => F_, h: P => P_): FOL[V_,F_,P_,U,B] = {
+  /** FOL terms without binders are traversable in their (syntactic) functors. */
+  def tritraverse[G[_]:Applicative,V,F,P,V_,F_,P_,U](
+    fol: FOL[V,F,P,U,Nothing])(
+    f: V => G[V_], g: F => G[F_], h: P => G[P_]): G[FOL[V_,F_,P_,U,Nothing]] =
     fol match {
-      case Pred(p,args)  => Pred(h(p),args.map(_.bimap(f,g)))
-      case And(p,q)      => And(trimap(p)(f,g,h),trimap(q)(f,g,h))
-      case Or(p,q)       => Or(trimap(p)(f,g,h),trimap(q)(f,g,h))
-      case Unary(u,p)    => Unary(u,trimap(p)(f,g,h))
-      case Bnding(b,v,p) => Bnding(b,f(v),trimap(p)(f,g,h))
-    }
+      case Pred(p,args) => (h(p) |@| args.traverse(_.bitraverse(f,g))) { Pred(_,_) }
+      case And(p,q) => (tritraverse(p)(f,g,h) |@| tritraverse(q)(f,g,h)) { And(_,_) }
+      case Or(p,q) => (tritraverse(p)(f,g,h) |@| tritraverse(q)(f,g,h)) { Or(_,_) }
+      case Unary(u,p) => tritraverse(p)(f,g,h).map { Unary(u,_) }
+      case Bnding(void,v,p) => void
   }
 
-  def trifoldMap[V:Order,F,P,U,B,M:Monoid](fol: FOL[V,F,P,U,B])(
+  def trimap[V,F,P,V_,F_,P_,U](fol: FOL[V,F,P,U,Nothing])(
+    f: V => V_, g: F => F_, h: P => P_): FOL[V_,F_,P_,U,Nothing] = {
+    tritraverse[Id,V,F,P,V_,F_,P_,U](fol)(f,g,h)
+  }
+  def trifoldMap[V:Order,F,P,U,M:Monoid](fol: FOL[V,F,P,U,Nothing])(
     f: V => M, g: F => M, h: P => M): M = {
-    def ffree(bounds: ISet[V], f: V => M, v: V) =
-      if (bounds.member(v)) ∅[M] else f(v)
-    def trifold(bounds: ISet[V], fol: FOL[V,F,P,U,B],
-      f: V => M, g: F => M, h: P => M): M = {
-      fol match {
-        case Pred(p,args) => h(p) |+| args.foldMap(_.bifoldMap(ffree(bounds,f,_))(g))
-        case And(p,q) => trifold(bounds,p,f,g,h) |+| trifold(bounds,q,f,g,h)
-        case Or(p,q) => trifold(bounds,p,f,g,h) |+| trifold(bounds,q,f,g,h)
-        case Unary(_,p) => trifold(bounds,p,f,g,h)
-        case Bnding(_,v,p) => trifold(bounds.insert(v),p,f,g,h)
-      }
-    }
-    trifold(ISet.empty,fol,f,g,h)
+    def f_(x:V): Const[M,Nothing] = Const(f(x))
+    def g_(x:F): Const[M,Nothing] = Const(g(x))
+    def h_(x:P): Const[M,Nothing] = Const(h(x))
+    tritraverse[Const[M,?],V,F,P,Nothing,Nothing,Nothing,U](fol)(f_,g_,h_).getConst
   }
 
   object Instances {
@@ -206,23 +182,18 @@ object Matrix {
   import FOL.{Binder,All,Exists,Neg,Instances}
   import Instances._
 
-  /** All variables in a matrix. */
-  def frees[V:Order,F:Order,P:Order](fol: Matrix[V,F,P]): ISet[V] =
-    preds(fol).foldMap { case Pred(p,args) => args.foldMap(_.frees) }
+  import FOL.Fresh
 
   /** All predicates in a matrix. */
   def preds[V:Order,F:Order,P:Order](fol: Matrix[V,F,P]):
-      ISet[Pred[V,F,P,Nothing,Nothing]] = {
-    fol match {
-      case p@Pred(_,_)      => ISet.singleton(p)
-      case And(p,q)         => preds(p) |+| preds(q)
-      case Or(p,q)          => preds(p) |+| preds(q)
-      case Unary(void,_)    => void
-      case Bnding(void,_,_) => void
-    }
+      ISet[Pred[V,F,P,Nothing,Nothing]] = fol match {
+    case p@Pred(_,_)      => ISet.singleton(p)
+    case And(p,q)         => preds(p) |+| preds(q)
+    case Or(p,q)          => preds(p) |+| preds(q)
+    case Unary(void,_)    => void
+    case Bnding(void,_,_) => void
   }
 
-  import FOL.Fresh
   /** Given a formula in NNF form (no unary operator), extract all binders,
       freshening variables as necessary.
     */
@@ -240,13 +211,17 @@ object Matrix {
     def getSubst : QPM[(V ==>> Fresh[V])] =
       get[(Int,V ==>> Fresh[V])].map(_._2).liftM[WT]
 
-    def bindFresh(v: V): QPM[Fresh[V]] = {
+    def bindFresh[A](v: V, f: Fresh[V] => QPM[A]): QPM[A] = {
       for (
         nθ    <- get[(Int,V ==>> Fresh[V])].liftM[WT];
         (n,θ) =  nθ;
         fresh =  originate(v).map(_ => n);
-        _  <- put((n+1, θ + (v → Prov.originate(v).map {_ => n}))).liftM[WT])
-      yield fresh
+        _  <- put((n+1, θ + (v → Prov.originate(v).map {_ => n}))).liftM[WT];
+        x <- f(fresh);
+        mθ    <- get[(Int,V ==>> Fresh[V])].liftM[WT];
+        (m,_) =  mθ;
+        _ <- put((m, θ)).liftM[WT])
+      yield x
     }
 
     def qp(fol: FOLIn): QPM[(Mat_,FOLOut)] = {
@@ -265,9 +240,9 @@ object Matrix {
           (qmatrix,qfol) = qpq)
         yield (Or(pmatrix,qmatrix),Or(pfol,qfol))
         case Unary(void,_) => void
-        case Bnding(b,v,p) => bindFresh(v) >>= {
+        case Bnding(b,v,p) => bindFresh(v, {
           v:Fresh[V] => List((b,v)) <++: qp(p)
-          }
+        })
         case pred@Pred(p,args) =>
           getSubst map { θ =>
             val newargs = args.map(_.map(v =>
@@ -276,18 +251,33 @@ object Matrix {
           }
       }
     }
+
     val (bnds,(matrix,nfol)) = qp(fol).run.eval((0,==>>.empty))
     (bnds,matrix,nfol)
   }
 
   /** Given a binding list and its matrix, skolemise to a matrix which is implicitly
       universally quantified. */
-  def skolemize[V:Order,F:Order,P:Order](
+  def skolemize[FV,V:Order,F:Order,P:Order](
     binders: List[(Binder,V)],
-    fol:     Matrix[V,F,P]): Matrix[V,V \/ F,P] = {
+    fol:     Matrix[FV \/ V,F,P]): Matrix[FV \/ V,V \/ F,P] = {
 
-    val vsets = preds(fol).map { case Pred(_,args) => args.foldMap(_.frees) }
-    val initSets = frees(fol).foldMap { v => ==>>.singleton(v,ISet.singleton(v)) }
+    val bound = ISet.fromList(binders.map(_._2))
+    val (vsets, initSets) = {
+      val fol_ : Matrix[ISet[V],F,P] = FOL.trimap(fol)(
+        _.fold(_ => ISet.empty, ISet.singleton(_)),
+        f => f,
+        p => p)
+      val vsets = preds(fol_).map {
+        case Pred(_,args) =>
+          args.foldMap(_.bifoldMap(s => s)(_ => ISet.empty)).intersection(bound)
+      }
+      val vs: ISet[V] =
+        FOL.trifoldMap(fol_)(s => s, _ => ISet.empty, _ => ISet.empty)
+      val initSets =
+        vs.foldMap { v => ==>>.singleton(v,ISet.singleton(v)) }
+      (vsets,initSets)
+    }
 
     def groupSet(varSets: V ==>> ISet[V], vs: ISet[V]) = {
       val union  = vs.foldMap (v => varSets.lookup(v).get)
@@ -297,21 +287,23 @@ object Matrix {
 
     val groups = vsets.foldLeft(initSets)(groupSet)
 
-    val (_,θ) = binders.foldLeft((List[V](),(==>>.empty[V,Term[V,V \/ F]]))) {
+    val (_,θ) = binders.foldLeft((List[V](),(==>>.empty[V,Term[FV \/ V,V \/ F]]))) {
       case ((deps,θ),(All,v))    => (deps :+ v,θ)
       case ((deps,θ),(Exists,v)) =>
         val neededDeps = for (
           u <- deps;
           if groups.lookup(v).get.contains(u))
-        yield Var[V,V \/ F](u)
+        yield Var[FV \/ V,V \/ F](u.right[FV])
         (deps, θ + (v → Fun(v.left,neededDeps)))
     }
-    def applySubst(fol: Matrix[V,F,P]): Matrix[V,V \/ F,P] =
+    def applySubst(fol: Matrix[FV \/ V,F,P]): Matrix[FV \/ V,V \/ F,P] =
       fol match {
         case Pred(p,args)     => Pred(p,args.map { _.bimap(
-          { v => θ.lookup(v).getOrElse(Var[V,V \/ F](v)) },
-          {_.right[V]}).
-            join
+          _.fold(
+            { fv => Var[FV \/ V,V \/ F](fv.left[V]) },
+            { v => θ.lookup(v).getOrElse(Var[FV \/ V,V \/ F](v.right[FV])) }),
+          { _.right[V]} )
+            .join
         })
         case And(p,q)         => And(applySubst(p),applySubst(q))
         case Or(p,q)          => Or(applySubst(p),applySubst(q))

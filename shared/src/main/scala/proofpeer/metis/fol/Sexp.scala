@@ -6,6 +6,7 @@ import scalaz._
 import Scalaz._
 
 import proofpeer.metis.Term
+import proofpeer.metis.{ Eql, Pred => APred }
 import proofpeer.metis.Var
 import proofpeer.metis.SExpr._
 import FOL._
@@ -23,8 +24,8 @@ import FOL.Instances._
 
   - Negations are representated by the list (not p) where p is a first-order formula.
 
-  - All other lists are predications whose first-element is the predicate symbol and
-  whose remaining elements are terms, as defined in `proofpeer.metis.SExpr`.
+  - All other lists are predications, with syntax identical to atoms as defined in
+  `proofpeer.metis.SExpr`.
 
   - Predications of two-arguments whose first element is one of the symbols '!, 'ex,
   'and, 'or, '->' or '<-> must have their predicate symbols disambiguated.
@@ -37,67 +38,44 @@ import FOL.Instances._
 
 object SExpr {
   def folOfImplies[B](
-    p: FOL[Sexp, Sexp, Sexp, FOL.Neg, B],
-    q: FOL[Sexp, Sexp, Sexp, FOL.Neg, B]):
-      FOL[Sexp, Sexp, Sexp, FOL.Neg, B] =
+    p: FOL[SExprFn, SExprFn, SExprFn, FOL.Neg, B],
+    q: FOL[SExprFn, SExprFn, SExprFn, FOL.Neg, B]):
+      FOL[SExprFn, SExprFn, SExprFn, FOL.Neg, B] =
     Or(Unary(FOL.Neg(),p),q)
 
   def folOfSExpr(sexpr: Sexp, desugar: Boolean):
-      ValidationNel[(Sexp, String), FOL[Sexp, Sexp, Sexp, FOL.Neg, FOL.Binder]] =
+      FOL[SExprFn, SExprFn, SExprFn, FOL.Neg, FOL.Binder] =
     sexpr match {
-      case SexpList(List(SexpList(List(sym@SexpSymbol(str))), x, y))
-          if str === "!" || str === "ex" || str === "and" || str === "or" ||
-          str == "->" || str == "<->" =>
-        Pred(sym:Sexp, List(termOfSExpr(x), termOfSExpr(y))).success
       case SexpList(List(SexpSymbol("!"), v, body)) =>
-        folOfSExpr(body,desugar).map { Bnding(FOL.All, v, _) }
+        Bnding(FOL.All, functorOfSExpr(v), folOfSExpr(body,desugar))
       case SexpList(List(SexpSymbol("ex"), v, body)) =>
-        folOfSExpr(body,desugar).map { Bnding(FOL.Exists, v, _) }
+        Bnding(FOL.Exists, functorOfSExpr(v), folOfSExpr(body,desugar))
       case SexpList(List(SexpSymbol("and"), p, q)) =>
-        (folOfSExpr(p,desugar) |@| folOfSExpr(q,desugar)) { And(_,_) }
+        And(folOfSExpr(p,desugar), folOfSExpr(q,desugar))
       case SexpList(List(SexpSymbol("or"), p, q)) =>
-        (folOfSExpr(p,desugar) |@| folOfSExpr(q,desugar)) { Or(_,_) }
+        Or(folOfSExpr(p,desugar),folOfSExpr(q,desugar))
       case SexpList(List(SexpSymbol("not"), p)) =>
-        folOfSExpr(p,desugar).map { Unary(FOL.Neg(),_) }
-      case SexpList(List(SexpList(List(sym@SexpSymbol("not"))), x)) =>
-        Pred(sym:Sexp, List(termOfSExpr(x))).success
+        Unary(Neg(), folOfSExpr(p,desugar))
       case SexpList(List(SexpSymbol("->"), p, q)) if desugar =>
-        (folOfSExpr(p,desugar) |@| folOfSExpr(q,desugar)) { folOfImplies(_,_) }
+        folOfImplies(folOfSExpr(p,desugar), folOfSExpr(q,desugar))
       case SexpList(List(SexpSymbol("<->"), p, q)) if desugar =>
-        (folOfSExpr(p,desugar) |@| folOfSExpr(q,desugar)) {
-          (p,q) => And(
-            folOfImplies(p, q),
-            folOfImplies(q, p))
+        val psexp = folOfSExpr(p,desugar)
+        val qsexp = folOfSExpr(q,desugar)
+        And(folOfImplies(psexp, qsexp), folOfImplies(qsexp, psexp))
+      case sexp =>
+        atomOfSExpr(sexpr) match {
+          case Eql(x,y) => Pred(-\/("="),List(x,y))
+          case APred(p,args) => Pred(p,args)
         }
-      case SexpList(p :: args) =>
-        Pred(p, args.map(termOfSExpr(_))).success
-      case _ => (sexpr, "formula expected").failureNel
     }
-  def lambdaOfSExpr(sexpr: Sexp, desugar: Boolean):
-      ValidationNel[(Sexp, String),
-        Term[Sexp,Sexp] => FOL[Sexp,Sexp,Sexp,FOL.Neg,FOL.Binder]] =
-    sexpr match {
-      case SexpList(List(SexpList(List(x)), body)) =>
-        folOfSExpr(body,desugar).map {
-          body => arg:Term[Sexp,Sexp] =>
-          body.inst { v =>
-            if (v === x) arg else Var(v)
-          }
-        }
-      case _ => (sexpr, "lambda expected").failureNel
-  }
   def SExprOfFol(
-    fol: FOL[Sexp,Sexp,Sexp,FOL.Neg,FOL.Binder],
+    fol: FOL[SExprFn,SExprFn,SExprFn,FOL.Neg,FOL.Binder],
     resugar: Boolean): Sexp =
     fol match {
       case Bnding(FOL.All, v, body) =>
-        SexpList(SexpSymbol("!"),v,SExprOfFol(body,resugar))
-      case Pred(sym@SexpSymbol(str), List(l, r))
-          if str === "!" || str === "ex" || str === "and" || str === "or"
-          || str == "->" || str == "<->" =>
-        SexpList(SexpList(sym),SExprOfTerm(l),SExprOfTerm(r))
+        SexpList(SexpSymbol("!"),SExprOfFn(v),SExprOfFol(body,resugar))
       case Bnding(FOL.Exists, v, body) =>
-        SexpList(SexpSymbol("ex"),v,SExprOfFol(body,resugar))
+        SexpList(SexpSymbol("ex"),SExprOfFn(v),SExprOfFol(body,resugar))
       case And(Or(Unary(FOL.Neg(),p1),q1), Or(Unary(FOL.Neg(),q2),p2))
           if resugar && p1 === p2 && q1 === q2 =>
         SexpList(SexpSymbol("<->"), SExprOfFol(p1,resugar), SExprOfFol(q1,resugar))
@@ -108,14 +86,6 @@ object SExpr {
       case Or(p,q) =>
         SexpList(SexpSymbol("or"), SExprOfFol(p,resugar), SExprOfFol(q,resugar))
       case Unary(FOL.Neg(), p) => SexpList(SexpSymbol("not"), SExprOfFol(p,resugar))
-      case Pred(sym@SexpSymbol("not"),List(x)) =>
-        SexpList(SexpList(SexpSymbol("not")), SExprOfTerm(x))
-      case Pred(p,args) => SexpList(p :: args.map(SExprOfTerm(_)))
+      case Pred(p,args) => SexpList(SExprOfFn(p) :: args.map(SExprOfTerm(_)))
     }
-  // sexpr should be an s-expression representing a fol without sugar
-  def invertTest(sexpr: Sexp) = {
-    folOfSExpr(sexpr,false).map { fol =>
-      SExprOfFol(fol,false) == sexpr
-    }.getOrElse(true)
-  }
 }
