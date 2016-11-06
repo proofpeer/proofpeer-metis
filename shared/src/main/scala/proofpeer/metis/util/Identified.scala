@@ -11,11 +11,11 @@ class Identified[A:Order] {
   private var objs = new ArrayList[A]()
   def getIndex(x: A): Int =
     m.lookup(x).getOrElse {
-      m = m.insert(x,i)
+      val j = i
+      m = m.insert(x,j)
       objs.add(x)
       i = i + 1
-      i
+      j
     }
   def getById(i: Int): A = objs.get(i)
 }
-
