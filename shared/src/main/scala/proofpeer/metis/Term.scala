@@ -212,27 +212,13 @@ object TermInstances {
     }
   }
 
-  implicit def TermIsBifunctor = new Bifunctor[Term] {
-    override def bimap[V,F,V_,F_](tm: Term[V,F])(f: V => V_,g: F => F_):
-        Term[V_,F_] = {
+  implicit def TermIsBitraverse: Bitraverse[Term] = new Bitraverse[Term] {
+    override def bitraverseImpl[G[_]:Applicative,V,F,V_,F_](tm: Term[V,F])(
+      f: V => G[V_], g: F => G[F_]) =
       tm match {
-        case Var(v)       => Var(f(v))
-        case Fun(fn,args) => Fun(g(fn),args.map(bimap(_)(f,g)))
-      }
-    }
-  }
-
-  implicit def TermIsBifoldable = new Bifoldable[Term] {
-    override def bifoldMap[V,F,M:Monoid](tm: Term[V,F])(f: V => M)(g: F => M): M =
-      tm match {
-        case Var(v) => f(v)
-        case Fun(fn,args) => g(fn) |+| args.foldMap(bifoldMap(_)(f)(g))
-      }
-    override def bifoldRight[V,F,A](tm: Term[V,F], z: => A)(
-      f: (V, => A) => A)(g: (F, => A) => A): A =
-      tm match {
-        case Var(v) => f(v,z)
-        case Fun(fn,args) => g(fn,args.foldRight(z)(bifoldRight(_,_)(f)(g)))
+        case Var(v) => f(v).map { Var(_) }
+        case Fun(fn,args) => (g(fn) |@| args.traverse(_.bitraverse(f,g)))
+          { Fun(_,_) }
       }
   }
 
