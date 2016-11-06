@@ -43,8 +43,6 @@ object Debug {
     theX
   }
 
-  import scalaz._
-  import Scalaz._
   def debugShowsTerm[V,F](term: Term[V,F]) = {
     import TermInstances._
     term match {
