@@ -55,7 +55,7 @@ trait TPTPPrinter[V,F,P] extends DefaultPrinter[V,F,P] {
 
   def printP(p: P): Cord =
     tptpOfP(p).filter(isFnId(_)).getOrElse { Cord("i_") |+| pmap.getIndex(p).show }
-  
+
   def tptpOfTerm(tm: Term[V,F]): Cord = tm match {
     case Var(x) => printV(x)
     case Fun(f,List()) => printF(f)
@@ -78,4 +78,3 @@ trait TPTPPrinter[V,F,P] extends DefaultPrinter[V,F,P] {
   def tptpOfClause(cl: Clause[V,F,P]) =
     Cord.mkCord(" | ", cl.lits.toList.map(tptpOfLiteral(_)):_*)
 }
-
