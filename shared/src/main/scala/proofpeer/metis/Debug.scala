@@ -1,5 +1,39 @@
 package proofpeer.metis
 
+import scalaz._
+import Scalaz._
+
+trait Printer[V,F,P] {
+  def printV(v: V): Cord
+  def printF(f: F): Cord
+  def printP(p: P): Cord
+  def printTerm(tm: Term[V,F]): Cord
+  def printAtom(atm: Atom[V,F,P]): Cord
+  def printLiteral(lit: Literal[V,F,P]): Cord
+  def printClause(cl: Clause[V,F,P]): Cord
+}
+
+trait DefaultPrinter[V,F,P] extends Printer[V,F,P] {
+  def printTerm(tm: Term[V,F]) = tm match {
+    case Var(v) => printV(v)
+    case Fun(f,List()) => printF(f)
+    case Fun(f,args) => printF(f) |+|
+      Cord("(") |+| Cord.mkCord(",",args.map(printTerm(_)):_*) |+| Cord(")")
+  }
+  def printAtom(atm: Atom[V,F,P]) = atm match {
+    case Eql(l,r) => printTerm(l) |+| "=" |+| printTerm(r)
+    case Pred(p,args) => printP(p) |+|
+      Cord("(") |+| Cord.mkCord(",",args.map(printTerm(_)):_*) |+| Cord(")")
+  }
+  def printLiteral(lit: Literal[V,F,P]) = lit match {
+    case Literal(true, atm) => printAtom(atm)
+    case Literal(false, atm) => Cord("~") |+| printAtom(atm)
+  }
+  def printClause(cl: Clause[V,F,P]) =
+    Cord("{") |+| Cord.mkCord(",", cl.lits.toList.map(printLiteral(_)):_*) |+|
+  Cord("}")
+}
+
 object Debug {
   def profile[A](name: String, x: => A) = {
     val start = System.nanoTime()
