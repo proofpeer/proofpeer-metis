@@ -103,10 +103,8 @@ object ZFProver {
     override def orderF = implicitly[Order[\/[Fresh[SexpFn],SexpFn]]]
     override def orderP = implicitly[Order[SexpFn]]
 
-    def tptpOfSexpFn(sym: SexpFn): Option[Cord] = sym match {
-      case -\/(sym) if sym.forall(_.isLetter) => Some(sym)
-      case _ => None
-    }
+    def tptpOfSexpFn(sym: SexpFn): Option[Cord] =
+      if (sym.forall(_.isLetter)) Some(sym) else None
 
     def tptpOfVAux(v: \/[SexpFn,Fresh[SexpFn]]): Option[Cord] =
       (v match {

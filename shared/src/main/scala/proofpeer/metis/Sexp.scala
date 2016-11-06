@@ -30,11 +30,10 @@ import org.ensime.sexp.{ SexpCompactPrinter => SexpPrinter }
     + positive literals are atoms.
 */
 object Sexp {
-  type SexpFn = String \/ Sexp
-  def functorOfString(str: String): SexpFn = -\/(str)
+  type SexpFn = String
+  def functorOfString(str: String): SexpFn = str
   def functorOfSexp(sexpr: Sexp): SexpFn = sexpr match {
     case SexpSymbol(sym) => functorOfString(sym)
-    case SexpList(List(SexpList(List(sexpr)))) => \/-(sexpr)
   }
   def termOfSexp(sexpr: Sexp): Term[SexpFn, SexpFn] = sexpr match {
     case SexpList(f :: args) => Fun(functorOfSexp(f), args.map(termOfSexp(_)))
@@ -56,8 +55,7 @@ object Sexp {
   }
 
   def SexpOfFn(fn: SexpFn): Sexp = fn match {
-    case -\/(fn) => SexpSymbol(fn)
-    case \/-(fn) => SexpList(List(SexpList(List(fn))))
+    case fn => SexpSymbol(fn)
   }
   def SexpOfTerm(tm: Term[SexpFn,SexpFn]): Sexp = tm match {
     case Var(v) => SexpOfFn(v)
