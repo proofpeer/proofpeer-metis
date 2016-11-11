@@ -49,7 +49,9 @@ case class IThmFactory[
     private def expandAbbrevs(thm: kernel.Thm) = {
       val firstSubst =
         thm.clause.toList.map {
-          case NeqLit(l,r) if l != r =>
+          case NeqLit(l@Var(_),r) if l != r =>
+            l.unify(Subst.empty,r)
+          case NeqLit(l,r@Var(_)) if l != r =>
             l.unify(Subst.empty,r)
           case _                     => None
         }.find (_.isDefined).flatten
