@@ -13,17 +13,21 @@ class IdentClause[V:Order,F:Order,P:Order] {
   val fmap = new Identified[F]
   val pmap = new Identified[P]
 
+  def toIdentV(v: V): Id = vmap.getIndex(v)
+  def toIdentF(f: F): Id = fmap.getIndex(f)
+  def toIdentP(p: P): Id = pmap.getIndex(p)
+
   def toIdentTerm(tm: Term[V,F]): Term[Id,Id] =
-    tm.bimap(vmap.getIndex(_), fmap.getIndex(_))
+    tm.bimap(toIdentV(_), toIdentF(_))
 
   def toIdentAtom(atm: Atom[V,F,P]): Atom[Id,Id,Id] =
-    Atom.trimap(atm)(vmap.getIndex(_), fmap.getIndex(_), pmap.getIndex(_))
+    Atom.trimap(atm)(toIdentV(_), toIdentF(_), toIdentP(_))
 
   def toIdentLiteral(lit: Literal[V,F,P]): Literal[Id,Id,Id] =
-    Literal.trimap(lit)(vmap.getIndex(_), fmap.getIndex(_), pmap.getIndex(_))
+    Literal.trimap(lit)(toIdentV(_), toIdentF(_), toIdentP(_))
 
   def toIdentClause(cl: Clause[V,F,P]): Clause[Id,Id,Id] = {
-    Clause.trimap(cl)(vmap.getIndex(_), fmap.getIndex(_), pmap.getIndex(_))
+    Clause.trimap(cl)(toIdentV(_), toIdentF(_), toIdentP(_))
   }
 
   def fromIdentTerm(tm: Term[Id,Id]): Term[V,F] =
@@ -91,16 +95,16 @@ class IdentClause[V:Order,F:Order,P:Order] {
       }
   }
 
-  implicit val ordFun = KnuthBendix.precedenceOrder[(Id,Id),Id]
-  implicit val kbo = KnuthBendix.kbo[(Id,Id),Id]
+  implicit val ordFun = KnuthBendix.precedenceOrder[(Id,Int),Id]
+  implicit val kbo = KnuthBendix.kbo[(Id,Int),Id]
   object ResolutionBasis {
-    val kernel = new Kernel[(Id,Id), Id, Id]
-    val factor = new Factor[(Id,Id), Id, Id]
+    val kernel = new Kernel[(Id,Int), Id, Id]
+    val factor = new Factor[(Id,Int), Id, Id]
     val litOrd = new MetisLiteralOrdering(kbo)
     val fin    = FinOrd(8)
-    val vals   = Valuations[(Id,Id)](fin)
-    val interpretation = Interpretation[(Id,Id),Id,Id](1000,vals)
-    val ithmF  = new IThmFactory[(Id,Id),Id,Id,Id,kernel.type](
+    val vals   = Valuations[(Id,Int)](fin)
+    val interpretation = Interpretation[(Id,Int),Id,Id](1000,vals)
+    val ithmF  = new IThmFactory[(Id,Int),Id,Id,Id,kernel.type](
       kernel,
       0,
       { case (n,(id,idx)) => (n+1,(id,n+1)) },
@@ -108,7 +112,7 @@ class IdentClause[V:Order,F:Order,P:Order] {
       factor)
   }
   def resolution(problem: List[Clause[V,F,P]], printer: Printer[(V,Id),F,P]):
-      Resolution[(Id,Id),Id,Id,Id,ResolutionBasis.kernel.type] =
+      Resolution[(Id,Int),Id,Id,Id,ResolutionBasis.kernel.type] =
     new Resolution(
       0,
       problem.map { cl => Clause.trimap(toIdentClause(cl))(
