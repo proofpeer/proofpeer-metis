@@ -35,6 +35,12 @@ trait DefaultPrinter[V,F,P] extends Printer[V,F,P] {
 }
 
 object Debug {
+  def showPrinter[V:Show,F:Show,P:Show] = new DefaultPrinter[V,F,P] {
+    def printV(v: V) = v.show
+    def printF(f: F) = f.show
+    def printP(p: P) = p.show
+  }
+
   def profile[A](name: String, x: => A) = {
     val start = System.nanoTime()
     val theX = x
