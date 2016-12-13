@@ -103,7 +103,7 @@ class IdentClause[V:Order,F:Order,P:Order] {
     val ithmF  = new IThmFactory[(Id,Id),Id,Id,Id,kernel.type](
       kernel,
       0,
-      { case (n,(id,idx)) => (n+1,(id,idx+1)) },
+      { case (n,(id,idx)) => (n+1,(id,n+1)) },
       litOrd,
       factor)
   }
